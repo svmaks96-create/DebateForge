@@ -130,7 +130,7 @@ export default function HomePage() {
           type="text"
           value={topic}
           onChange={e => setTopic(e.target.value)}
-          placeholder="What decision should we debate?"
+          placeholder="What decision should we explore?"
           className="w-full px-5 py-4 text-lg bg-white/[0.03] border border-white/10 rounded-xl text-gray-100 placeholder-gray-600 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 focus:outline-none transition-all"
         />
         <button
@@ -222,9 +222,9 @@ export default function HomePage() {
               >
                 <span className="text-sm text-gray-300 truncate">{d.topic}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  {d.verdict && (
-                    <span className="text-[10px] text-gray-500">
-                      {d.verdict.winner || 'Tied'}
+                  {d.verdict?.synthesis && (
+                    <span className="text-[10px] text-gray-500 capitalize">
+                      {d.verdict.synthesis.confidence_level || 'analyzed'}
                     </span>
                   )}
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusColors[d.status] || 'bg-gray-500/20 text-gray-400'}`}>

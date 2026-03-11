@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from agent import DebateAgent
 from events import publish_event
-from judge import judge_debate
+from judge import synthesize_debate
 from models import Argument, Debate, DebateAgent as DebateAgentModel, Round
 
 logger = logging.getLogger("uvicorn.error")
@@ -169,14 +169,14 @@ async def _run_debate_inner(debate_id: uuid.UUID, db: AsyncSession) -> None:
             "round_number": round_row.round_number,
         })
 
-    # Judging phase
+    # Synthesis phase
     debate.status = "judging"
     await db.commit()
-    await publish_event(str(debate_id), "judging_start", {})
+    await publish_event(str(debate_id), "synthesis_start", {})
 
-    await judge_debate(debate_id, db)
+    await synthesize_debate(debate_id, db)
 
-    logger.info("Debate %s completed successfully", debate_id)
+    logger.info("Exploration %s completed successfully", debate_id)
 
 
 async def _run_panel(

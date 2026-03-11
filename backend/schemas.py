@@ -77,11 +77,44 @@ class ArgumentData(BaseModel):
     warrant: str
     backing: str
     qualifier: str
+    confidence: int = Field(default=5, ge=0, le=10)
 
 
 class AgentResponse(BaseModel):
     arguments: list[ArgumentData]
     summary: str
+
+
+# --- Synthesis schemas ---
+
+class SynthesisArgument(BaseModel):
+    argument: str
+    strength: str
+    supporting_evidence: str
+    agent_confidence: int | float
+    caveats: str
+
+
+class UnresolvedTension(BaseModel):
+    tension: str
+    why_unresolved: str
+    what_would_resolve_it: str
+
+
+class Synthesis(BaseModel):
+    bottom_line: str
+    confidence_level: str
+    arguments_for: list[SynthesisArgument] = Field(default_factory=list)
+    arguments_against: list[SynthesisArgument] = Field(default_factory=list)
+    areas_of_agreement: list[str] = Field(default_factory=list)
+    unresolved_tensions: list[UnresolvedTension] = Field(default_factory=list)
+    key_insights: list[str] = Field(default_factory=list)
+    evidence_gaps: list[str] = Field(default_factory=list)
+    nuanced_conclusion: str
+
+
+class SynthesisResponse(BaseModel):
+    synthesis: Synthesis
 
 
 # --- Debate schemas ---

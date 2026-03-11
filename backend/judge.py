@@ -19,23 +19,28 @@ logger = logging.getLogger("uvicorn.error")
 MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 4096
 
-FALLBACK_VERDICT = {
-    "verdict": "DRAW",
-    "confidence": 0.5,
-    "score": {"pro": 50, "con": 50},
-    "executive_summary": "Judge analysis could not be parsed. Review arguments manually.",
-    "recommendation": "Re-run the debate or review the raw transcript.",
+FALLBACK_SYNTHESIS = {
+    "synthesis": {
+        "bottom_line": "Synthesis could not be completed. Review the arguments manually.",
+        "confidence_level": "uncertain",
+        "arguments_for": [],
+        "arguments_against": [],
+        "areas_of_agreement": [],
+        "unresolved_tensions": [],
+        "key_insights": [],
+        "evidence_gaps": [],
+        "nuanced_conclusion": "The synthesizer could not produce a valid analysis. Please review the raw transcript.",
+    }
 }
 
 
-def _build_judge_system_prompt(
+def _build_synthesizer_system_prompt(
     topic: str,
     context: str | None,
     agents: list[DebateAgentModel],
 ) -> str:
     pro_agents = [a for a in agents if a.side == "pro"]
     con_agents = [a for a in agents if a.side == "con"]
-    is_panel = len(pro_agents) > 1 or len(con_agents) > 1
 
     def agent_block(a: DebateAgentModel) -> str:
         return (
@@ -47,100 +52,84 @@ def _build_judge_system_prompt(
     pro_list = "\n".join(agent_block(a) for a in pro_agents)
     con_list = "\n".join(agent_block(a) for a in con_agents)
 
-    panel_section = ""
-    if is_panel:
-        panel_section = """
-- panel_dynamics (object, only for multi-agent panels):
-    - coordination: How well agents on the same side coordinated
-    - coverage: Whether the panel covered the topic broadly
-    - synergy: Whether arguments built on each other
-    - strongest_agent: Prefix of strongest contributor per side
-    - weakest_agent: Prefix of weakest contributor per side"""
-
     prompt = f"""\
-You are an expert debate judge. Evaluate the following debate with rigorous analytical precision.
+You are a synthesis analyst. You have just observed a dialectical exploration where multiple \
+analysts examined a proposition from different angles. Your job is NOT to pick a winner — \
+it is to synthesize the collective insight into actionable understanding.
 
 Proposition: {topic}
 {"Context: " + context if context else ""}
 
-PRO panel:
+FOR analysts:
 {pro_list}
 
-CON panel:
+AGAINST analysts:
 {con_list}
 
-Analysis framework — evaluate every argument using ALL of the following:
-
-1. Toulmin scoring (0.0-10.0 per dimension per argument):
-   - claim_score: Clarity and specificity of the claim
-   - grounds_score: Quality and relevance of evidence
-   - warrant_score: Logical connection between grounds and claim
-   - backing_score: Additional support and credibility
-   - qualifier_score: Appropriate hedging and scope limitation
-   - overall_strength: Holistic assessment
-
-2. Fallacy detection: For each fallacy found, specify type, explanation, severity (low/medium/high)
-
-3. Logical dependency mapping: Which arguments depend on or respond to which, and whether defeating one collapses a chain
-
-4. Evidence quality: Per side — specificity, relevance, recency, authority
-
-5. Rebuttal effectiveness: Did rebuttals steelman or strawman the opponent?
-
-6. Consistency check: Any contradictions within a side?
-{panel_section}
+SYNTHESIS PRINCIPLES:
+1. Do NOT pick a winner or declare one side superior.
+2. Rank arguments by genuine evidential strength, not rhetorical skill.
+3. Highlight where analysts AGREED — these convergence points are likely the most reliable conclusions.
+4. Be honest about what is genuinely uncertain or unresolvable with available evidence.
+5. Note the self-assessed confidence levels from the analysts themselves.
+6. Produce actionable insight, not just academic analysis.
+7. When analysts conceded points, treat those concessions as high-signal data.
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
 Output format:
 {{
-  "verdict": "PRO|CON|DRAW",
-  "confidence": 0.0-1.0,
-  "score": {{"pro": 0-100, "con": 0-100}},
-  "executive_summary": "2-3 sentence summary of the outcome",
-  "recommendation": "Actionable recommendation based on the debate",
-  "argument_analysis": [
-    {{
-      "argument_index": "A1",
-      "claim_score": 7.5,
-      "grounds_score": 8.0,
-      "warrant_score": 7.0,
-      "backing_score": 6.5,
-      "qualifier_score": 7.0,
-      "overall_strength": 7.2,
-      "fallacies": [
-        {{"type": "appeal_to_authority", "explanation": "...", "severity": "low"}}
-      ],
-      "notes": "Brief commentary on this argument"
-    }}
-  ],
-  "dependency_graph": [
-    {{"from": "B1", "to": "A1", "relationship": "rebuts"}}
-  ],
-  "evidence_quality": {{
-    "pro": {{"specificity": 7, "relevance": 8, "recency": 6, "authority": 7}},
-    "con": {{"specificity": 6, "relevance": 7, "recency": 7, "authority": 6}}
-  }},
-  "rebuttal_assessment": {{
-    "pro": "Assessment of pro rebuttals",
-    "con": "Assessment of con rebuttals"
-  }},
-  "consistency": {{
-    "pro": "Any contradictions found",
-    "con": "Any contradictions found"
+  "synthesis": {{
+    "bottom_line": "A 2-3 sentence executive summary of what the exploration revealed. Not who won, but what the collective analysis suggests.",
+    "confidence_level": "high|moderate|low|uncertain",
+    "arguments_for": [
+      {{
+        "argument": "The core claim",
+        "strength": "strong|moderate|weak",
+        "supporting_evidence": "Key evidence cited by analysts",
+        "agent_confidence": 8,
+        "caveats": "Important limitations or conditions"
+      }}
+    ],
+    "arguments_against": [
+      {{
+        "argument": "The core counter-claim",
+        "strength": "strong|moderate|weak",
+        "supporting_evidence": "Key evidence cited",
+        "agent_confidence": 7,
+        "caveats": "Limitations"
+      }}
+    ],
+    "areas_of_agreement": [
+      "Points where both sides converged or one side conceded"
+    ],
+    "unresolved_tensions": [
+      {{
+        "tension": "Description of what remains genuinely debatable",
+        "why_unresolved": "Why the analysts couldn't resolve this",
+        "what_would_resolve_it": "What evidence or data would settle this"
+      }}
+    ],
+    "key_insights": [
+      "Non-obvious insights that emerged from the exploration"
+    ],
+    "evidence_gaps": [
+      "Important questions that couldn't be answered without more data"
+    ],
+    "nuanced_conclusion": "A 2-3 paragraph balanced conclusion that a decision-maker could actually use. Not 'X wins' but 'Here is what the evidence suggests, here is where it is uncertain, and here is what to consider.'"
   }}
 }}"""
 
     return prompt
 
 
-def _build_judge_user_message(
+def _build_synthesizer_user_message(
     arguments: list[Argument],
     agents: list[DebateAgentModel],
     rounds_info: list[dict],
 ) -> str:
     agent_map = {a.id: a for a in agents}
 
-    msg = "=== FULL DEBATE TRANSCRIPT ===\n"
+    msg = "=== FULL EXPLORATION TRANSCRIPT ===\n"
 
     # Group arguments by round
     args_by_round: dict[int, list[Argument]] = {}
@@ -172,21 +161,27 @@ def _build_judge_user_message(
             msg += f"\n  Warrant: {arg.warrant or '(none)'}"
             msg += f"\n  Backing: {arg.backing or '(none)'}"
             msg += f"\n  Qualifier: {arg.qualifier or '(none)'}"
+            # Include agent self-assessed confidence if available
+            if arg.raw_response:
+                for raw_arg in arg.raw_response.get("arguments", []):
+                    if raw_arg.get("id") == arg.argument_index and "confidence" in raw_arg:
+                        msg += f"\n  Agent Confidence: {raw_arg['confidence']}/10"
+                        break
             if arg.summary:
                 msg += f"\n  Summary: {arg.summary}"
             msg += "\n"
 
     msg += "\n=== END TRANSCRIPT ===\n"
-    msg += "\nEvaluate this debate now. Respond with JSON only."
+    msg += "\nSynthesize this exploration now. Respond with JSON only."
     return msg
 
 
-def _parse_judge_response(raw_text: str) -> dict | None:
-    """Three-tier parse: direct JSON → code block → None."""
+def _parse_synthesis_response(raw_text: str) -> dict | None:
+    """Three-tier parse: direct JSON -> code block -> brace search."""
     # Try 1: direct parse
     try:
         data = json.loads(raw_text)
-        if "verdict" in data:
+        if "synthesis" in data:
             return data
     except json.JSONDecodeError:
         pass
@@ -196,7 +191,7 @@ def _parse_judge_response(raw_text: str) -> dict | None:
     if match:
         try:
             data = json.loads(match.group(1))
-            if "verdict" in data:
+            if "synthesis" in data:
                 return data
         except json.JSONDecodeError:
             pass
@@ -206,7 +201,7 @@ def _parse_judge_response(raw_text: str) -> dict | None:
     if brace_start >= 0:
         try:
             data = json.loads(raw_text[brace_start:])
-            if "verdict" in data:
+            if "synthesis" in data:
                 return data
         except json.JSONDecodeError:
             pass
@@ -214,11 +209,11 @@ def _parse_judge_response(raw_text: str) -> dict | None:
     return None
 
 
-async def judge_debate(
+async def synthesize_debate(
     debate_id: uuid.UUID,
     db: AsyncSession,
 ) -> None:
-    """Evaluate a completed debate and save the verdict."""
+    """Synthesize a completed dialectical exploration and save the synthesis."""
     # Load debate
     debate = await db.get(Debate, debate_id)
     if not debate:
@@ -253,24 +248,25 @@ async def judge_debate(
     ]
 
     if not arguments:
-        logger.warning("No arguments found for debate %s, using fallback verdict", debate_id)
-        debate.verdict = FALLBACK_VERDICT
+        logger.warning("No arguments found for debate %s, using fallback synthesis", debate_id)
+        debate.verdict = FALLBACK_SYNTHESIS
         debate.status = "completed"
         debate.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await publish_event(str(debate_id), "debate_complete", {
             "debate_id": str(debate_id),
-            "verdict": FALLBACK_VERDICT,
+            "synthesis_preview": FALLBACK_SYNTHESIS["synthesis"]["bottom_line"],
+            "confidence_level": FALLBACK_SYNTHESIS["synthesis"]["confidence_level"],
         })
         return
 
     # Build prompts
-    system_prompt = _build_judge_system_prompt(debate.topic, debate.context, agents)
-    user_message = _build_judge_user_message(arguments, agents, rounds_info)
+    system_prompt = _build_synthesizer_system_prompt(debate.topic, debate.context, agents)
+    user_message = _build_synthesizer_user_message(arguments, agents, rounds_info)
 
     # Call Claude
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-    verdict_data = None
+    synthesis_data = None
 
     for attempt in range(2):
         try:
@@ -281,54 +277,40 @@ async def judge_debate(
                 messages=[{"role": "user", "content": user_message}],
             )
             raw_text = response.content[0].text
-            verdict_data = _parse_judge_response(raw_text)
-            if verdict_data:
+            synthesis_data = _parse_synthesis_response(raw_text)
+            if synthesis_data:
                 break
-            logger.warning("Judge response parse failed on attempt %d", attempt + 1)
+            logger.warning("Synthesis response parse failed on attempt %d", attempt + 1)
         except anthropic.APIError as e:
             if attempt == 0:
-                logger.warning("Judge Claude API error on attempt 1, retrying: %s", e)
+                logger.warning("Synthesizer Claude API error on attempt 1, retrying: %s", e)
                 continue
-            logger.error("Judge Claude API error on attempt 2: %s", e)
+            logger.error("Synthesizer Claude API error on attempt 2: %s", e)
 
-    if not verdict_data:
-        logger.error("Judge could not produce valid verdict for debate %s, using fallback", debate_id)
-        verdict_data = FALLBACK_VERDICT
+    if not synthesis_data:
+        logger.error("Synthesizer could not produce valid output for debate %s, using fallback", debate_id)
+        synthesis_data = FALLBACK_SYNTHESIS
 
-    # Save per-argument analysis rows
-    for arg_analysis in verdict_data.get("argument_analysis", []):
-        analysis_row = ArgumentAnalysis(
-            debate_id=debate_id,
-            argument_index=arg_analysis.get("argument_index", "?"),
-            claim_score=_to_decimal(arg_analysis.get("claim_score")),
-            grounds_score=_to_decimal(arg_analysis.get("grounds_score")),
-            warrant_score=_to_decimal(arg_analysis.get("warrant_score")),
-            backing_score=_to_decimal(arg_analysis.get("backing_score")),
-            qualifier_score=_to_decimal(arg_analysis.get("qualifier_score")),
-            overall_strength=_to_decimal(arg_analysis.get("overall_strength")),
-            fallacies=arg_analysis.get("fallacies"),
-            notes=arg_analysis.get("notes"),
-        )
-        db.add(analysis_row)
-
-    # Save verdict to debate
-    debate.verdict = verdict_data
+    # Save synthesis to debate (stored in verdict column for backward compatibility)
+    debate.verdict = synthesis_data
     debate.status = "completed"
     debate.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
-    # Publish completion SSE
+    # Publish completion SSE with synthesis preview
+    synthesis = synthesis_data.get("synthesis", {})
     await publish_event(str(debate_id), "debate_complete", {
         "debate_id": str(debate_id),
-        "verdict": {
-            "verdict": verdict_data.get("verdict"),
-            "confidence": verdict_data.get("confidence"),
-            "score": verdict_data.get("score"),
-            "executive_summary": verdict_data.get("executive_summary"),
-        },
+        "synthesis_preview": synthesis.get("bottom_line", ""),
+        "confidence_level": synthesis.get("confidence_level", "uncertain"),
     })
 
-    logger.info("Judge completed for debate %s: %s", debate_id, verdict_data.get("verdict"))
+    logger.info("Synthesis completed for debate %s: confidence=%s",
+                debate_id, synthesis.get("confidence_level"))
+
+
+# Backward compatibility alias
+judge_debate = synthesize_debate
 
 
 def _to_decimal(val) -> Decimal | None:

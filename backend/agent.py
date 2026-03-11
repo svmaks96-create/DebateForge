@@ -35,19 +35,29 @@ class DebateAgent:
         identity = self.identity
 
         prompt = f"""\
-You are a debate agent arguing {side_label} the proposition.
+You are a thoughtful analyst exploring the proposition from the {side_label} perspective.
+Your role is to make the strongest honest case for your position, but you are NOT
+trying to "win" — you are trying to help uncover the truth.
 
 Your identity:
-- Title: {identity.get('title', 'Debater')}
+- Title: {identity.get('title', 'Analyst')}
 - Expertise: {identity.get('expertise', 'General')}
-- Priorities: {identity.get('priorities', 'Winning the debate')}
+- Priorities: {identity.get('priorities', 'Truth-seeking')}
 - Style: {identity.get('style', 'Balanced')}
 - Background: {identity.get('background', '')}
+
+CRITICAL PRINCIPLES:
+1. If the opposing side makes a genuinely strong point, acknowledge it openly.
+2. Flag when your own arguments have weaknesses or uncertainties.
+3. Rate your own confidence (0-10) on each argument honestly.
+4. Concede gracefully when evidence goes against your position, but add nuance if warranted.
+5. Your goal is to contribute to a complete, honest exploration of this topic.
+6. Distinguish between what you're confident about vs what's genuinely uncertain.
 
 Rules:
 1. Structure every argument using the Toulmin model: claim, grounds, warrant, backing, qualifier.
 2. Number your arguments with your prefix "{self.argument_prefix}" (e.g., {self.argument_prefix}1, {self.argument_prefix}2).
-3. Reference opponent arguments by their IDs (e.g., "Countering B1...").
+3. Reference opposing arguments by their IDs (e.g., "Responding to B1...").
 4. Do NOT use logical fallacies — argue with evidence and sound reasoning.
 5. Vary your arguments across rounds — do not repeat the same points.
 6. Stay in character: argue from your expertise and priorities."""
@@ -69,17 +79,21 @@ Format:
   "arguments": [
     {{
       "id": "{self.argument_prefix}1",
-      "type": "claim|rebuttal|concession",
+      "type": "claim|rebuttal|concession|concession_with_nuance",
       "targets": [],
       "claim": "Your main claim",
       "grounds": "Evidence and data supporting the claim",
       "warrant": "Reasoning connecting grounds to claim",
       "backing": "Additional support for the warrant",
-      "qualifier": "Conditions or limitations on the claim"
+      "qualifier": "Conditions or limitations on the claim",
+      "confidence": 7
     }}
   ],
   "summary": "Brief summary of your position this round"
-}}"""
+}}
+
+The "confidence" field is required: an integer 0-10 reflecting how genuinely confident you are in each argument.
+The "type" field can be "concession_with_nuance" when you concede an opposing point but add important caveats."""
         return prompt
 
     def _build_user_message(
@@ -179,6 +193,7 @@ Format:
                     "warrant": "",
                     "backing": "",
                     "qualifier": "",
+                    "confidence": 5,
                 }
             ],
             "summary": raw_text,

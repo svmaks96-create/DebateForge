@@ -81,7 +81,7 @@ class Argument(Base):
     agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("debate_agents.id"), nullable=False)
     agent_side: Mapped[str] = mapped_column(VARCHAR(10), nullable=False)
     argument_index: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
-    arg_type: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
+    arg_type: Mapped[str] = mapped_column(VARCHAR(30), nullable=False)
     targets: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     claim: Mapped[str | None] = mapped_column(Text, nullable=True)
     grounds: Mapped[str | None] = mapped_column(Text, nullable=True)

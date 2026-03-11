@@ -61,20 +61,35 @@ export default function useDebateStream(debateId) {
     });
 
     es.addEventListener('round_end', (e) => {
-      const data = JSON.parse(e.data);
       setCurrentRound((prev) =>
         prev ? { ...prev, completed: true } : prev
       );
     });
 
+    // Handle both old "judging_start" and new "synthesis_start" events
     es.addEventListener('judging_start', () => {
+      setStatus('judging');
+    });
+
+    es.addEventListener('synthesis_start', () => {
       setStatus('judging');
     });
 
     es.addEventListener('debate_complete', (e) => {
       const data = JSON.parse(e.data);
       setStatus('completed');
-      setVerdict(data.verdict);
+      // New format sends synthesis_preview + confidence_level
+      // Old format sends verdict object
+      if (data.synthesis_preview) {
+        setVerdict({
+          synthesis: {
+            bottom_line: data.synthesis_preview,
+            confidence_level: data.confidence_level || 'uncertain',
+          },
+        });
+      } else {
+        setVerdict(data.verdict);
+      }
       disconnect();
     });
 

@@ -1,11 +1,14 @@
-# DebateForge — AI Debate Platform
+# DebateForge — AI Dialectical Exploration Platform
+
+> **Note:** v1 was a competitive debate platform. v2 pivoted to dialectical exploration for synthesized insight.
 
 ## What Is This
-DebateForge is an internal web tool where AI agents debate both sides of a decision topic.
-Teams enter a question (e.g., "Should we migrate to microservices?"), configure the debate
-format and agent identities, then watch Claude-powered agents argue Pro vs Con through
-structured rounds. A separate Claude judge evaluates the debate using Toulmin-model argument
-analysis, fallacy detection, and logical dependency mapping.
+DebateForge is an internal web tool where AI agents explore both sides of a decision topic
+through structured dialectical analysis. Teams enter a question (e.g., "Should we migrate
+to microservices?"), configure the exploration format and agent identities, then watch
+Claude-powered agents argue Pro vs Con through structured rounds — not to win, but to
+uncover truth. A separate Claude synthesizer produces a balanced synthesis of the exploration
+including areas of agreement, unresolved tensions, and actionable insight.
 
 ## Tech Stack
 - **Backend**: FastAPI (Python 3.13) running in Docker
@@ -32,8 +35,8 @@ analysis, fallacy detection, and logical dependency mapping.
 │   ├── models.py                 # ORM models (all 6 tables)
 │   ├── schemas.py                # Pydantic request/response models
 │   ├── debate_engine.py          # Orchestrator: runs rounds, manages turns
-│   ├── agent.py                  # Claude debating agent wrapper
-│   ├── judge.py                  # Claude judge agent + Toulmin analysis
+│   ├── agent.py                  # Claude dialectical agent wrapper
+│   ├── judge.py                  # Claude synthesizer (was judge in v1)
 │   ├── identity_generator.py     # Claude-powered identity auto-generation
 │   ├── events.py                 # Redis pub/sub for SSE streaming
 │   └── routes/
@@ -110,7 +113,7 @@ analysis, fallacy detection, and logical dependency mapping.
 - agent_id: UUID FK → debate_agents
 - agent_side: VARCHAR(10)
 - argument_index: VARCHAR(20) — "A1", "B2"
-- arg_type: VARCHAR(20) — claim | rebuttal | concession
+- arg_type: VARCHAR(20) — claim | rebuttal | concession | concession_with_nuance
 - targets: JSONB
 - claim, grounds, warrant, backing, qualifier, summary: TEXT
 - raw_response: JSONB
@@ -144,7 +147,7 @@ GET    /api/debates                        List debates (?page, ?status)
 GET    /api/debates/{id}                   Full debate + arguments
 POST   /api/debates/{id}/start             Kick off (async) → 202
 GET    /api/debates/{id}/stream            SSE live events
-GET    /api/debates/{id}/analysis          Judge analysis
+GET    /api/debates/{id}/analysis          Synthesis analysis (legacy: judge verdict)
 DELETE /api/debates/{id}                   Soft delete
 
 GET    /api/formats                        List preset formats
@@ -165,8 +168,8 @@ POST   /api/personas/from-debate/{debate_id} Save debate agents as personas
    - First-speaking side's agents speak sequentially (each sees teammates' prior args)
    - Second-speaking side's agents speak sequentially
    - Opening rounds: pro first. Rebuttal rounds: con first.
-4. After final round: judge evaluates full transcript
-5. Save analysis, set status to completed
+4. After final round: synthesizer produces balanced synthesis of the full exploration
+5. Save synthesis to verdict column, set status to completed
 
 ## Agent Identity System
 - Each agent has: title, expertise, priorities, style, background
@@ -176,9 +179,12 @@ POST   /api/personas/from-debate/{debate_id} Save debate agents as personas
 - Intra-panel: agents called sequentially, each sees teammates' args to avoid repetition
 
 ## AI Prompt Strategy
-- Debating agents output structured JSON with Toulmin fields
+- Agents are truth-seeking analysts, not competitive debaters — they concede freely and rate their own confidence (0-10) per argument
+- Agents output structured JSON with Toulmin fields + confidence score
 - Each argument gets an ID (A1, B2, C1, etc.) for cross-referencing
-- Judge produces: verdict, confidence, Toulmin scores, fallacy list, dependency graph, evidence quality, panel dynamics
+- arg_type includes "concession_with_nuance" for conceding with caveats
+- Synthesizer (was "judge" in v1) produces: bottom_line, confidence_level, arguments_for/against, areas_of_agreement, unresolved_tensions, key_insights, evidence_gaps, nuanced_conclusion
+- Synthesizer does NOT pick a winner — it produces balanced, actionable insight
 - Model: claude-sonnet-4-20250514
 - Parse: try JSON → try code block extraction → fallback to plain text
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trophy, Scale, ArrowLeft, ArrowDown, Loader } from 'lucide-react';
+import { FileText, ArrowLeft, ArrowDown, Loader } from 'lucide-react';
 import api from '../api';
 import useDebateStream from '../hooks/useDebateStream';
 import LiveViewer from '../components/LiveViewer';
@@ -13,11 +13,56 @@ const roundTypeLabels = {
   closing: 'Closing',
 };
 
-function VerdictBanner({ verdict }) {
+const confidenceBannerColors = {
+  high: 'from-green-600/20 to-emerald-900/10 border-green-500/30',
+  moderate: 'from-yellow-600/20 to-yellow-900/10 border-yellow-500/30',
+  low: 'from-orange-600/20 to-orange-900/10 border-orange-500/30',
+  uncertain: 'from-gray-600/20 to-gray-900/10 border-gray-500/30',
+};
+
+const confidenceBadgeColors = {
+  high: 'bg-green-500/20 text-green-400 border-green-500/30',
+  moderate: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  low: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  uncertain: 'bg-red-500/20 text-red-400 border-red-500/30',
+};
+
+function SynthesisBanner({ verdict }) {
   if (!verdict) return null;
 
-  const winner = verdict.verdict; // "PRO", "CON", "DRAW"
-  const confidence = verdict.confidence;
+  const synthesis = verdict.synthesis;
+  if (!synthesis) {
+    // Legacy verdict — show minimal fallback
+    return <LegacyVerdictBanner verdict={verdict} />;
+  }
+
+  const confidence = synthesis.confidence_level || 'uncertain';
+  const bannerCls = confidenceBannerColors[confidence] || confidenceBannerColors.uncertain;
+  const badgeCls = confidenceBadgeColors[confidence] || confidenceBadgeColors.uncertain;
+
+  return (
+    <div className={`rounded-xl border bg-gradient-to-r ${bannerCls} p-5 mb-6`}>
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <FileText size={24} className="mt-0.5 flex-shrink-0 text-gray-300" />
+          <div className="min-w-0">
+            <p className="text-sm text-gray-200 leading-relaxed font-medium">
+              {synthesis.bottom_line}
+            </p>
+          </div>
+        </div>
+        <div className="flex-shrink-0">
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${badgeCls}`}>
+            {confidence.charAt(0).toUpperCase() + confidence.slice(1)} confidence
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LegacyVerdictBanner({ verdict }) {
+  const winner = verdict.verdict;
   const score = verdict.score || {};
 
   const colorMap = {
@@ -25,19 +70,18 @@ function VerdictBanner({ verdict }) {
     CON: 'from-amber-600/30 to-amber-900/20 border-amber-500/40',
     DRAW: 'from-gray-600/30 to-gray-900/20 border-gray-500/40',
   };
-
   const textMap = {
     PRO: 'text-blue-300',
     CON: 'text-amber-300',
     DRAW: 'text-gray-300',
   };
 
+  if (!winner) return null;
+
   return (
     <div className={`rounded-xl border bg-gradient-to-r ${colorMap[winner] || colorMap.DRAW} p-5 mb-6`}>
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-        {/* Left: winner + summary */}
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <Trophy size={24} className={`mt-0.5 flex-shrink-0 ${textMap[winner] || 'text-gray-300'}`} />
           <div className="min-w-0">
             <div className={`text-xl font-bold ${textMap[winner] || 'text-gray-300'}`}>
               {winner === 'DRAW' ? 'Draw' : `${winner} Wins`}
@@ -47,14 +91,7 @@ function VerdictBanner({ verdict }) {
             )}
           </div>
         </div>
-
-        {/* Right: confidence + scores */}
         <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
-          {confidence != null && (
-            <div className="text-xs text-gray-500">
-              Confidence: <span className="text-gray-300 font-medium">{Math.round(confidence * 100)}%</span>
-            </div>
-          )}
           <div className="flex items-center gap-3 text-sm">
             <span className="text-blue-400 font-medium">PRO {score.pro ?? '–'}</span>
             <span className="text-gray-600">vs</span>
@@ -102,8 +139,8 @@ function StatusBar({ status, currentRound, totalRounds, formatName }) {
       )}
       {status === 'judging' && (
         <span className="flex items-center gap-1.5 text-amber-400">
-          <Scale size={12} />
-          Judge analyzing…
+          <FileText size={12} />
+          Synthesizing…
         </span>
       )}
       {status === 'completed' && (
@@ -116,11 +153,11 @@ function StatusBar({ status, currentRound, totalRounds, formatName }) {
   );
 }
 
-function JudgingOverlay() {
+function SynthesizingOverlay() {
   return (
-    <div className="flex items-center justify-center gap-3 py-8 my-4 rounded-xl border border-amber-500/20 bg-amber-500/5">
-      <Scale size={20} className="text-amber-400 animate-pulse" />
-      <span className="text-amber-300 font-medium">Judge is analyzing the debate…</span>
+    <div className="flex items-center justify-center gap-3 py-8 my-4 rounded-xl border border-violet-500/20 bg-violet-500/5">
+      <FileText size={20} className="text-violet-400 animate-pulse" />
+      <span className="text-violet-300 font-medium">Synthesizing insights…</span>
     </div>
   );
 }
@@ -133,7 +170,7 @@ export default function DebatePage() {
   const [fetchError, setFetchError] = useState(null);
   const analysisRef = useRef(null);
 
-  // Determine if we should stream (only for running/judging debates)
+  // Determine if we should stream (only for running/configuring debates)
   const shouldStream = debate && ['running', 'configuring'].includes(debate.status);
 
   const stream = useDebateStream(shouldStream ? id : null);
@@ -266,10 +303,10 @@ export default function DebatePage() {
         </div>
       )}
 
-      {/* Verdict banner + jump to analysis */}
+      {/* Synthesis/verdict banner + jump to analysis */}
       {effectiveStatus === 'completed' && displayVerdict && (
         <div>
-          <VerdictBanner verdict={displayVerdict} />
+          <SynthesisBanner verdict={displayVerdict} />
           <div className="flex justify-end -mt-4 mb-2">
             <button
               type="button"
@@ -282,8 +319,8 @@ export default function DebatePage() {
         </div>
       )}
 
-      {/* Judging overlay */}
-      {effectiveStatus === 'judging' && <JudgingOverlay />}
+      {/* Synthesizing overlay */}
+      {effectiveStatus === 'judging' && <SynthesizingOverlay />}
 
       {/* Configuring state */}
       {effectiveStatus === 'configuring' && (

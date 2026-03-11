@@ -190,7 +190,16 @@ async def get_analysis(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     if debate.status not in ("completed",):
         raise HTTPException(status_code=400, detail=f"Debate not yet completed (status: {debate.status})")
 
-    # Load argument analyses
+    verdict_data = debate.verdict or {}
+
+    # New synthesis format
+    if "synthesis" in verdict_data:
+        return {
+            "debate_id": str(debate_id),
+            "synthesis": verdict_data["synthesis"],
+        }
+
+    # Legacy verdict format (backward compatibility for old debates)
     result = await db.execute(
         select(ArgumentAnalysis)
         .where(ArgumentAnalysis.debate_id == debate_id)
@@ -199,7 +208,7 @@ async def get_analysis(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db))
 
     return {
         "debate_id": str(debate_id),
-        "verdict": debate.verdict,
+        "verdict": verdict_data,
         "argument_analyses": [
             {
                 "argument_index": a.argument_index,

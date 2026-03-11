@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Trophy, Loader, Inbox } from 'lucide-react';
+import { Clock, FileText, Trophy, Loader, Inbox } from 'lucide-react';
 import api from '../api';
 
 const statusStyles = {
   running: 'bg-blue-500/20 text-blue-400 animate-pulse',
-  judging: 'bg-amber-500/20 text-amber-400',
+  judging: 'bg-violet-500/20 text-violet-400',
   completed: 'bg-green-500/20 text-green-400',
   error: 'bg-red-500/20 text-red-400',
   configuring: 'bg-gray-500/20 text-gray-400',
@@ -38,14 +38,33 @@ function agentSummary(agents) {
   return `${pro.length}v${con.length} panel`;
 }
 
-function verdictLabel(verdict) {
+function synthesisLabel(verdict) {
   if (!verdict) return null;
+
+  // New synthesis format
+  if (verdict.synthesis) {
+    const confidence = verdict.synthesis.confidence_level;
+    const colorMap = {
+      high: 'text-green-400',
+      moderate: 'text-yellow-400',
+      low: 'text-orange-400',
+      uncertain: 'text-red-400',
+    };
+    return {
+      text: confidence ? `${confidence.charAt(0).toUpperCase() + confidence.slice(1)} confidence` : 'Synthesized',
+      color: colorMap[confidence] || 'text-gray-400',
+      icon: 'synthesis',
+      preview: verdict.synthesis.bottom_line,
+    };
+  }
+
+  // Legacy verdict format
   const w = verdict.verdict || verdict.winner;
   if (!w) return null;
-  if (w === 'DRAW') return { text: 'DRAW', color: 'text-gray-400' };
-  if (w === 'PRO') return { text: 'PRO WINS', color: 'text-blue-400' };
-  if (w === 'CON') return { text: 'CON WINS', color: 'text-amber-400' };
-  return { text: w, color: 'text-gray-400' };
+  if (w === 'DRAW') return { text: 'DRAW', color: 'text-gray-400', icon: 'legacy' };
+  if (w === 'PRO') return { text: 'PRO WINS', color: 'text-blue-400', icon: 'legacy' };
+  if (w === 'CON') return { text: 'CON WINS', color: 'text-amber-400', icon: 'legacy' };
+  return { text: w, color: 'text-gray-400', icon: 'legacy' };
 }
 
 export default function HistoryPage() {
@@ -102,9 +121,8 @@ export default function HistoryPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {debates.map(d => {
-            const v = verdictLabel(d.verdict);
+            const v = synthesisLabel(d.verdict);
             const summary = agentSummary(d.agents);
-            const score = d.verdict?.score;
             const formatName = d.format_config?.format_name;
 
             return (
@@ -119,21 +137,25 @@ export default function HistoryPage() {
                     {d.topic?.length > 80 ? d.topic.slice(0, 80) + '...' : d.topic}
                   </p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${statusStyles[d.status] || 'bg-gray-500/20 text-gray-400'}`}>
-                    {d.status}
+                    {d.status === 'judging' ? 'synthesizing' : d.status}
                   </span>
                 </div>
 
-                {/* Verdict + scores */}
+                {/* Synthesis label or legacy verdict */}
                 {v && (
-                  <div className="flex items-center gap-3 mb-2">
-                    <Trophy size={12} className={v.color} />
-                    <span className={`text-xs font-semibold ${v.color}`}>{v.text}</span>
-                    {score && (
-                      <span className="text-[10px] text-gray-600 ml-auto">
-                        <span className="text-blue-400/70">{score.pro}</span>
-                        {' - '}
-                        <span className="text-amber-400/70">{score.con}</span>
-                      </span>
+                  <div className="mb-2">
+                    <div className="flex items-center gap-2">
+                      {v.icon === 'synthesis' ? (
+                        <FileText size={12} className={v.color} />
+                      ) : (
+                        <Trophy size={12} className={v.color} />
+                      )}
+                      <span className={`text-xs font-semibold ${v.color}`}>{v.text}</span>
+                    </div>
+                    {v.preview && (
+                      <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                        {v.preview}
+                      </p>
                     )}
                   </div>
                 )}
