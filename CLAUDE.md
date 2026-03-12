@@ -82,11 +82,11 @@ including areas of agreement, unresolved tensions, and actionable insight.
 - context: TEXT (nullable)
 - format_config: JSONB — {format_name, rounds: [{type, word_limit}]}
 - panel_config: JSONB DEFAULT '{"pro_count": 1, "con_count": 1}'
-- status: VARCHAR(20) — configuring | running | judging | completed | error
+- status: VARCHAR(20) — configuring | running | synthesizing | completed | error
 - created_by_ip: VARCHAR(45)
 - created_at: TIMESTAMP
 - completed_at: TIMESTAMP (nullable)
-- verdict: JSONB (nullable)
+- verdict: JSONB (nullable) — stores synthesis JSON (field name kept from v1 for backward compatibility)
 
 ### rounds
 - id: UUID PK
@@ -113,13 +113,17 @@ including areas of agreement, unresolved tensions, and actionable insight.
 - agent_id: UUID FK → debate_agents
 - agent_side: VARCHAR(10)
 - argument_index: VARCHAR(20) — "A1", "B2"
-- arg_type: VARCHAR(20) — claim | rebuttal | concession | concession_with_nuance
+- arg_type: VARCHAR(30) — claim | rebuttal | concession | concession_with_nuance
 - targets: JSONB
 - claim, grounds, warrant, backing, qualifier, summary: TEXT
+- confidence: DECIMAL(3,1) — agent self-assessed confidence (0.0-10.0), added in v2 pivot
 - raw_response: JSONB
 - created_at: TIMESTAMP
 
-### argument_analysis
+### argument_analysis (legacy)
+> **Note:** Legacy table from v1 competitive scoring model. Kept for backward compatibility
+> with older debates. New debates use the synthesis JSON stored in `debates.verdict` instead.
+
 - id: UUID PK
 - debate_id: UUID FK → debates
 - argument_index: VARCHAR(20)
@@ -187,6 +191,29 @@ POST   /api/personas/from-debate/{debate_id} Save debate agents as personas
 - Synthesizer does NOT pick a winner — it produces balanced, actionable insight
 - Model: claude-sonnet-4-20250514
 - Parse: try JSON → try code block extraction → fallback to plain text
+
+## Synthesis Output Fields
+The synthesizer (judge.py) produces a JSON object stored in `debates.verdict` with these fields:
+- **bottom_line** — One-paragraph executive summary of the exploration's findings
+- **confidence_level** — Synthesizer's confidence in the bottom line (0-10)
+- **arguments_for** — Strongest pro arguments with brief assessment
+- **arguments_against** — Strongest con arguments with brief assessment
+- **areas_of_agreement** — Points where both sides converged or conceded
+- **unresolved_tensions** — Genuine disagreements that the exploration could not resolve
+- **key_insights** — Non-obvious findings that emerged from the dialectical process
+- **evidence_gaps** — Important questions neither side adequately addressed
+- **nuanced_conclusion** — Extended analysis with caveats, conditions, and context-dependent recommendations
+
+## SSE Events
+Events streamed via Redis pub/sub on channel `debate:{id}:events`:
+- **connected** — Client successfully subscribed to event stream
+- **debate_start** — Debate engine has begun processing
+- **round_start** — New round beginning, includes round_number and round_type
+- **argument** — Agent produced an argument, includes full argument data
+- **round_end** — Round completed, includes round_number
+- **synthesis_start** — Synthesizer has begun producing the final synthesis
+- **debate_complete** — Debate finished, includes final status and synthesis summary
+- **error** — Something went wrong, includes error message and context
 
 ## Key Conventions
 - All IDs: UUID v4

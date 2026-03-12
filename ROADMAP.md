@@ -1,16 +1,21 @@
 # DebateForge — Feature Roadmap
 
 > Last updated: March 2026
-> Status: v1 prototype deployed and working
+> Status: v2 dialectical exploration platform deployed and working
+
+> **For the 4 priority analysis quality upgrades (Evidence Mode, Adversarial Verification,
+> Position Evolution, Decision Frameworks), see QUALITY_UPGRADES_PLAN.md**
 
 ---
 
-## Current State (v1 — Shipped)
+## Current State (v2 — Dialectical Exploration)
 
-- AI-vs-AI structured debates with configurable formats
+- AI-vs-AI dialectical exploration: agents are truth-seekers, not competitive debaters
+- Agents concede freely when evidence is stronger and rate their own confidence (0-10) per argument
+- Structured Toulmin-model arguments with self-assessed confidence scores
+- Synthesizer produces balanced insight: areas of agreement, unresolved tensions, key insights, evidence gaps
 - Panel format (1v1 up to 4v4) with distinct agent identities
 - Auto-generated or manual identities, with persona library
-- Full Toulmin-model judge analysis (fallacy detection, dependency mapping, evidence quality, scoring)
 - Real-time SSE streaming of debates
 - React frontend: gate, launcher, live viewer, analysis dashboard, history, persona library
 - Deployed on VPS at http://<IP>:8080, behind invite code auth
@@ -20,7 +25,7 @@
 ## Priority 1: Evidence Mode (Web Search + Citations)
 
 **The big idea:** Agents don't just reason — they research. Each agent can search the web for real
-data, studies, and sources to back their arguments. The judge then evaluates whether citations
+data, studies, and sources to back their arguments. The synthesizer then evaluates whether citations
 are real, relevant, and correctly interpreted.
 
 ### How It Works
@@ -48,18 +53,18 @@ are real, relevant, and correctly interpreted.
    }
    ```
 
-3. **Judge evaluates citations**
+3. **Synthesizer evaluates citations**
    - Are citations real and accessible?
    - Do they actually support the claim made?
    - Are they recent enough to be relevant?
    - Are they authoritative sources (peer-reviewed > blog post > reddit comment)?
    - Is the agent cherry-picking or fairly representing the source?
-   - New judge output field: `citation_analysis` per argument
+   - New synthesizer output field: `citation_analysis` per argument
 
 4. **Frontend changes**
    - Citations appear as clickable links in ArgumentCard
    - Expandable "Sources" section per argument
-   - Judge analysis shows citation quality scores
+   - Synthesis shows citation quality scores
    - New icon/badge for arguments that are evidence-backed vs purely logical
 
 ### Implementation Plan
@@ -69,7 +74,7 @@ are real, relevant, and correctly interpreted.
 - Define a search tool schema: `{"name": "web_search", "description": "Search the web for evidence", "input_schema": {"query": "string"}}`
 - Implement the actual search backend (options: Brave Search API, Tavily API, or SerpAPI)
 - Update argument schema to include `citations` JSONB field
-- Update judge prompt to evaluate citation quality
+- Update synthesizer prompt to evaluate citation quality
 - New DB column: `arguments.citations JSONB`
 
 **Frontend changes:**
@@ -90,7 +95,7 @@ are real, relevant, and correctly interpreted.
 
 ### Export Debates as PDF
 - Add `GET /api/debates/{id}/export?format=pdf` endpoint
-- Generate a clean report: topic, agents, all arguments, judge analysis, verdict
+- Generate a clean report: topic, agents, all arguments, synthesis analysis
 - Use WeasyPrint or reportlab in Python
 - Add "Export PDF" button on DebatePage
 - **Effort:** 2-3 hours
@@ -127,7 +132,7 @@ are real, relevant, and correctly interpreted.
 - User argues one side, AI argues the other
 - DebatePage gets a text input for the human's turn
 - Debate engine waits for human input between AI turns
-- Judge evaluates both human and AI arguments equally
+- Synthesizer evaluates both human and AI arguments equally
 - WebSocket may be needed (SSE is server→client only)
 - **Effort:** 8-10 hours
 
@@ -141,16 +146,9 @@ are real, relevant, and correctly interpreted.
 
 ### Debate Comparison Mode
 - Run same topic with different formats, agents, or panel sizes
-- Side-by-side results view: did the verdict change? Which arguments appeared in one but not the other?
+- Side-by-side results view: did the synthesis change? Which arguments appeared in one but not the other?
 - Useful for testing decision robustness
 - **Effort:** 4-5 hours
-
-### Better Judge Calibration
-- Run the judge 3 times per debate with slightly varied prompts
-- Average the scores for more reliable verdicts
-- Show confidence intervals on scores
-- Cost: 3x judge calls (~$0.10-0.20 extra per debate)
-- **Effort:** 2-3 hours
 
 ### Real-Time Cost Counter
 - Track token usage per Claude API call
@@ -183,15 +181,8 @@ are real, relevant, and correctly interpreted.
 - Fun for team offsites
 - **Effort:** 1-2 days
 
-### Domain-Specific Presets
-- "Technical Architecture Decision" — auto-picks engineering personas, uses Deep Dive format
-- "Hiring Decision" — HR, hiring manager, team lead personas
-- "Investment Decision" — CFO, analyst, risk officer personas
-- Each preset configures format + agents + custom judge criteria
-- **Effort:** 3-4 hours
-
 ### Fine-Tuned Scoring Model
-- Collect judge outputs over time as training data
+- Collect synthesizer outputs over time as training data
 - Train a lightweight classifier for faster/cheaper argument scoring
 - Use Claude only for complex analysis, lightweight model for scoring
 - **Effort:** Multi-week research project
@@ -202,9 +193,13 @@ are real, relevant, and correctly interpreted.
 
 If continuing development:
 
-1. Markdown rendering (30 min) — immediate visual improvement
-2. Export as PDF (2-3 hrs) — most requested by stakeholders
-3. Evidence mode (6-8 hrs) — the big differentiator
+1. Quality upgrades (18-23 hrs) — see QUALITY_UPGRADES_PLAN.md for detailed specs
+   a. Decision Framework Templates (4-5 hrs) — zero API cost, immediate UX improvement
+   b. Position Evolution Tracking (4-5 hrs) — confidence timeline + reflections
+   c. Evidence Mode (6-8 hrs) — web search + citations, the big differentiator
+   d. Adversarial Verification (4-5 hrs) — fact-checker agent, builds on evidence mode
+2. Markdown rendering (30 min) — immediate visual improvement
+3. Export as PDF (2-3 hrs) — most requested by stakeholders
 4. Mobile responsive (2 hrs) — accessibility
 5. Argument graph D3 (4-6 hrs) — wow factor
 6. Human-vs-AI mode (8-10 hrs) — engagement

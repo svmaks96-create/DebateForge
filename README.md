@@ -1,17 +1,17 @@
 # DebateForge
 
-An AI-powered structured debate platform where Claude agents argue both sides of a topic through configurable debate formats, then a separate Claude judge evaluates the arguments using Toulmin-model analysis.
+An AI-powered dialectical exploration platform where Claude agents explore both sides of a topic as truth-seekers through configurable formats, then a synthesizer produces balanced insight including areas of agreement, unresolved tensions, and actionable recommendations.
 
 ## Features
 
-- **AI-vs-AI debates** — Claude-powered agents argue Pro vs Con through structured rounds
+- **AI-vs-AI dialectical exploration** — Agents argue honestly, concede when evidence is stronger, and rate their own confidence
 - **Configurable formats** — Opening, rebuttal, cross-examination, and closing rounds with adjustable word limits
 - **Panel support** — 1v1 up to 4v4 debates with distinct agent identities per side
-- **Toulmin analysis** — Judge evaluates claim, grounds, warrant, backing, and qualifier for every argument
+- **Toulmin-structured arguments** — Each argument includes claim, grounds, warrant, backing, qualifier, and self-assessed confidence
 - **Identity generation** — Auto-generate contextually relevant agent identities with Claude
 - **Persona library** — Save, browse, and reuse agent personas across debates (8 seed templates included)
 - **Real-time streaming** — Watch debates unfold live via Server-Sent Events
-- **Judge analysis** — Verdict with confidence score, fallacy detection, argument dependency graph, evidence quality ratings, and panel dynamics
+- **Synthesis report** — Bottom line assessment, key arguments for and against, areas of agreement, unresolved tensions, key insights, and evidence gaps
 
 ## Prerequisites
 
@@ -170,7 +170,7 @@ debateforge/
 │   ├── schemas.py              # Pydantic request/response models
 │   ├── debate_engine.py        # Orchestrator: rounds + turns
 │   ├── agent.py                # Claude debating agent
-│   ├── judge.py                # Claude judge + Toulmin analysis
+│   ├── judge.py                # Claude synthesizer (balanced insight, not winner-picking)
 │   ├── identity_generator.py   # Claude-powered identity generation
 │   ├── events.py               # Redis pub/sub for SSE
 │   ├── seed_personas.py        # 8 seed persona templates
