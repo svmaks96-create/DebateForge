@@ -234,3 +234,11 @@ POST   /api/personas/from-debate/{debate_id} Save debate agents as personas
 ## Roadmap
 See ROADMAP.md for the full feature roadmap.
 Next priority: Evidence Mode (web search + citations for agent arguments).
+
+## Quality Upgrades Plan
+See QUALITY_UPGRADES_PLAN.md for detailed implementation specs for 4 features:
+1. Evidence Mode (web search + citations) — 6-8 hrs
+2. Adversarial Verification (fact-checker agent) — 4-5 hrs
+3. Position Evolution Tracking (confidence timeline) — 4-5 hrs
+4. Decision Framework Templates (domain-specific analysis) — 4-5 hrs
+Build in order — each feature benefits from the previous ones.
