@@ -6,39 +6,37 @@ router = APIRouter(prefix="/api/formats", tags=["formats"], dependencies=[Depend
 
 PRESET_FORMATS = [
     {
-        "name": "quick_fire",
-        "description": "Fast single-round debate — opening statements only.",
+        "name": "quick_take",
+        "description": "Fast initial perspectives — 1 round (opening only).",
         "rounds": [
             {"type": "opening", "word_limit": 300},
         ],
     },
     {
-        "name": "oxford",
-        "description": "Classic three-round format: opening, rebuttal, closing.",
+        "name": "rapid_assessment",
+        "description": "Quick exploration — 2 rounds (opening + discussion).",
         "rounds": [
             {"type": "opening", "word_limit": 400},
-            {"type": "rebuttal", "word_limit": 300},
-            {"type": "closing", "word_limit": 200},
+            {"type": "discussion", "word_limit": 300},
         ],
     },
     {
-        "name": "lincoln_douglas",
-        "description": "Four-round format with cross-examination.",
+        "name": "standard",
+        "description": "Default deliberation — 3 rounds (opening + discussion + closing).",
         "rounds": [
             {"type": "opening", "word_limit": 400},
-            {"type": "cross_exam", "word_limit": 300},
-            {"type": "rebuttal", "word_limit": 300},
+            {"type": "discussion", "word_limit": 300},
             {"type": "closing", "word_limit": 200},
         ],
     },
     {
         "name": "deep_dive",
-        "description": "Extended five-round deep analysis.",
+        "description": "Thorough analysis — 5 rounds (opening + discussion + exploration + discussion + closing).",
         "rounds": [
             {"type": "opening", "word_limit": 500},
-            {"type": "rebuttal", "word_limit": 400},
-            {"type": "cross_exam", "word_limit": 400},
-            {"type": "rebuttal", "word_limit": 300},
+            {"type": "discussion", "word_limit": 400},
+            {"type": "exploration", "word_limit": 400},
+            {"type": "discussion", "word_limit": 300},
             {"type": "closing", "word_limit": 300},
         ],
     },

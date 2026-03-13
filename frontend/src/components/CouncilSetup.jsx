@@ -3,7 +3,18 @@ import { Users, BookOpen, PenLine, Cpu } from 'lucide-react';
 import IdentityCard from './IdentityCard';
 import PersonaPickerModal from './PersonaPickerModal';
 
-const panelSizes = [1, 2, 3, 4];
+const SEAT_COLORS = [
+  { name: 'Blue',    hex: '#3B82F6', border: 'border-blue-500/20', borderDashed: 'border-blue-500/20', text: 'text-blue-400', bg: 'bg-blue-500/20', textMuted: 'text-blue-500/40' },
+  { name: 'Amber',   hex: '#F59E0B', border: 'border-amber-500/20', borderDashed: 'border-amber-500/20', text: 'text-amber-400', bg: 'bg-amber-500/20', textMuted: 'text-amber-500/40' },
+  { name: 'Emerald', hex: '#10B981', border: 'border-emerald-500/20', borderDashed: 'border-emerald-500/20', text: 'text-emerald-400', bg: 'bg-emerald-500/20', textMuted: 'text-emerald-500/40' },
+  { name: 'Purple',  hex: '#8B5CF6', border: 'border-violet-500/20', borderDashed: 'border-violet-500/20', text: 'text-violet-400', bg: 'bg-violet-500/20', textMuted: 'text-violet-500/40' },
+  { name: 'Rose',    hex: '#F43F5E', border: 'border-rose-500/20', borderDashed: 'border-rose-500/20', text: 'text-rose-400', bg: 'bg-rose-500/20', textMuted: 'text-rose-500/40' },
+  { name: 'Cyan',    hex: '#06B6D4', border: 'border-cyan-500/20', borderDashed: 'border-cyan-500/20', text: 'text-cyan-400', bg: 'bg-cyan-500/20', textMuted: 'text-cyan-500/40' },
+];
+
+const PREFIXES = ['A', 'B', 'C', 'D', 'E', 'F'];
+const COUNCIL_SIZES = [2, 3, 4, 5, 6];
+
 const modes = [
   { id: 'auto', label: 'Auto-generate', icon: Cpu },
   { id: 'library', label: 'From Library', icon: BookOpen },
@@ -18,10 +29,10 @@ const manualFields = [
   { key: 'background', label: 'Background' },
 ];
 
-function AgentSlot({ agent, side, index, onUpdate }) {
+function AgentSlot({ agent, seatIndex, onUpdate }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const prefixes = side === 'pro' ? ['A','C','E','G'] : ['B','D','F','H'];
-  const prefix = prefixes[index] || '?';
+  const color = SEAT_COLORS[seatIndex];
+  const prefix = PREFIXES[seatIndex];
 
   function setMode(mode) {
     onUpdate({ ...agent, mode, identity: null, personaId: null });
@@ -49,15 +60,14 @@ function AgentSlot({ agent, side, index, onUpdate }) {
   }
 
   return (
-    <div className={`rounded-lg border p-3 bg-white/[0.02] ${
-      side === 'pro' ? 'border-blue-500/15' : 'border-amber-500/15'
-    }`}>
+    <div className={`rounded-lg border p-3 bg-white/[0.02] ${color.border}`}>
       <div className="flex items-center justify-between mb-3">
-        <span className={`text-xs font-mono font-bold ${
-          side === 'pro' ? 'text-blue-400' : 'text-amber-400'
-        }`}>
-          Agent {prefix}
-        </span>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color.hex }} />
+          <span className={`text-xs font-mono font-bold ${color.text}`}>
+            Seat {seatIndex + 1} ({prefix})
+          </span>
+        </div>
         <div className="flex rounded-md overflow-hidden border border-white/10">
           {modes.map(m => (
             <button
@@ -65,7 +75,7 @@ function AgentSlot({ agent, side, index, onUpdate }) {
               onClick={() => setMode(m.id)}
               className={`px-2 py-1 text-[10px] flex items-center gap-1 transition-colors cursor-pointer ${
                 agent.mode === m.id
-                  ? side === 'pro' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'
+                  ? `${color.bg} ${color.text}`
                   : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.04]'
               }`}
             >
@@ -77,9 +87,7 @@ function AgentSlot({ agent, side, index, onUpdate }) {
       </div>
 
       {agent.mode === 'auto' && !agent.identity && (
-        <div className={`flex items-center justify-center h-20 rounded border border-dashed ${
-          side === 'pro' ? 'border-blue-500/20 text-blue-500/40' : 'border-amber-500/20 text-amber-500/40'
-        }`}>
+        <div className={`flex items-center justify-center h-20 rounded border border-dashed ${color.borderDashed} ${color.textMuted}`}>
           <span className="text-xs">Will be auto-generated</span>
         </div>
       )}
@@ -87,7 +95,7 @@ function AgentSlot({ agent, side, index, onUpdate }) {
       {agent.mode === 'auto' && agent.identity && (
         <IdentityCard
           identity={agent.identity}
-          side={side}
+          seatIndex={seatIndex}
           onChange={identity => onUpdate({ ...agent, identity })}
         />
       )}
@@ -96,11 +104,7 @@ function AgentSlot({ agent, side, index, onUpdate }) {
         <>
           <button
             onClick={() => setPickerOpen(true)}
-            className={`w-full h-20 rounded border border-dashed flex items-center justify-center gap-2 text-xs transition-colors cursor-pointer ${
-              side === 'pro'
-                ? 'border-blue-500/20 text-blue-400/60 hover:border-blue-500/40 hover:text-blue-400'
-                : 'border-amber-500/20 text-amber-400/60 hover:border-amber-500/40 hover:text-amber-400'
-            }`}
+            className={`w-full h-20 rounded border border-dashed flex items-center justify-center gap-2 text-xs transition-colors cursor-pointer ${color.borderDashed} ${color.textMuted} hover:opacity-80`}
           >
             <BookOpen size={14} />
             Pick from Library
@@ -118,7 +122,7 @@ function AgentSlot({ agent, side, index, onUpdate }) {
         <div>
           <IdentityCard
             identity={agent.identity}
-            side={side}
+            seatIndex={seatIndex}
             onChange={identity => onUpdate({ ...agent, identity })}
           />
           <button
@@ -158,7 +162,7 @@ function AgentSlot({ agent, side, index, onUpdate }) {
       {agent.mode === 'manual' && agent.identity?.title && (
         <IdentityCard
           identity={agent.identity}
-          side={side}
+          seatIndex={seatIndex}
           onChange={identity => onUpdate({ ...agent, identity })}
         />
       )}
@@ -166,11 +170,10 @@ function AgentSlot({ agent, side, index, onUpdate }) {
   );
 }
 
-export default function AgentSetup({ panelSize, onPanelSizeChange, agents, onAgentsChange }) {
-  function updateAgent(side, index, agent) {
-    const newAgents = { ...agents };
-    newAgents[side] = [...agents[side]];
-    newAgents[side][index] = agent;
+export default function CouncilSetup({ councilSize, onCouncilSizeChange, agents, onAgentsChange }) {
+  function updateAgent(index, agent) {
+    const newAgents = [...agents];
+    newAgents[index] = agent;
     onAgentsChange(newAgents);
   }
 
@@ -178,60 +181,31 @@ export default function AgentSetup({ panelSize, onPanelSizeChange, agents, onAge
     <div>
       <div className="flex items-center justify-center gap-2 mb-5">
         <Users size={16} className="text-gray-500" />
-        <span className="text-xs text-gray-500 mr-2">Panel Size</span>
-        {panelSizes.map(size => (
+        <span className="text-xs text-gray-500 mr-2">Council Size</span>
+        {COUNCIL_SIZES.map(size => (
           <button
             key={size}
-            onClick={() => onPanelSizeChange(size)}
+            onClick={() => onCouncilSizeChange(size)}
             className={`px-3 py-1.5 text-xs rounded-md border transition-all cursor-pointer ${
-              panelSize === size
+              councilSize === size
                 ? 'border-blue-500/50 bg-blue-500/15 text-blue-400'
                 : 'border-white/10 text-gray-500 hover:border-white/20 hover:text-gray-300'
             }`}
           >
-            {size}v{size}
+            {size}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* PRO Side */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-blue-500" />
-            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Pro</span>
-          </div>
-          <div className="space-y-3">
-            {agents.pro.map((agent, i) => (
-              <AgentSlot
-                key={i}
-                agent={agent}
-                side="pro"
-                index={i}
-                onUpdate={a => updateAgent('pro', i, a)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* CON Side */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
-            <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Con</span>
-          </div>
-          <div className="space-y-3">
-            {agents.con.map((agent, i) => (
-              <AgentSlot
-                key={i}
-                agent={agent}
-                side="con"
-                index={i}
-                onUpdate={a => updateAgent('con', i, a)}
-              />
-            ))}
-          </div>
-        </div>
+      <div className="space-y-3">
+        {agents.map((agent, i) => (
+          <AgentSlot
+            key={i}
+            agent={agent}
+            seatIndex={i}
+            onUpdate={a => updateAgent(i, a)}
+          />
+        ))}
       </div>
     </div>
   );

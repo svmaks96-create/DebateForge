@@ -3,9 +3,16 @@ import api from '../api';
 
 const roundTypeLabels = {
   opening: 'Opening',
-  rebuttal: 'Rebuttal',
-  cross_exam: 'Cross-Exam',
+  discussion: 'Discussion',
+  exploration: 'Exploration',
   closing: 'Closing',
+};
+
+const formatDisplayNames = {
+  quick_take: 'Quick Take',
+  rapid_assessment: 'Rapid Assessment',
+  standard: 'Standard',
+  deep_dive: 'Deep Dive',
 };
 
 export default function FormatSelector({ selected, onSelect }) {
@@ -44,7 +51,7 @@ export default function FormatSelector({ selected, onSelect }) {
             }`}
           >
             <h3 className={`font-semibold text-sm mb-1 ${isSelected ? 'text-blue-400' : 'text-gray-200'}`}>
-              {fmt.display_name}
+              {formatDisplayNames[fmt.name] || fmt.name}
             </h3>
             <p className="text-xs text-gray-500 mb-3">{fmt.description}</p>
             <div className="flex flex-wrap gap-1">

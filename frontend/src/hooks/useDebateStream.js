@@ -3,8 +3,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 export default function useDebateStream(debateId) {
   const [status, setStatus] = useState('connecting');
   const [currentRound, setCurrentRound] = useState(null);
-  const [arguments_, setArguments] = useState({ pro: [], con: [] });
-  const [verdict, setVerdict] = useState(null);
+  const [arguments_, setArguments] = useState([]);
+  const [positions, setPositions] = useState([]);
+  const [synthesis, setSynthesis] = useState(null);
   const [totalRounds, setTotalRounds] = useState(0);
   const [error, setError] = useState(null);
   const esRef = useRef(null);
@@ -25,7 +26,7 @@ export default function useDebateStream(debateId) {
     esRef.current = es;
 
     es.addEventListener('connected', () => {
-      // Connection established, wait for debate events
+      // Connection established
     });
 
     es.addEventListener('debate_start', (e) => {
@@ -44,57 +45,59 @@ export default function useDebateStream(debateId) {
 
     es.addEventListener('argument', (e) => {
       const data = JSON.parse(e.data);
-      const side = data.side; // "pro" or "con"
-      const newArgs = (data.arguments || []).map((arg) => ({
-        ...arg,
-        side,
-        agentPrefix: data.agent_prefix,
-        agentTitle: data.agent_title,
+      const arg = {
+        argument_index: data.argument_index,
+        agent_prefix: data.agent_prefix,
+        agent_title: data.agent_title,
+        seat_number: data.seat_number,
+        stance: data.stance || 'neutral',
+        confidence: data.confidence ?? 5,
+        claim: data.claim || '',
+        summary: data.summary || '',
+        arg_type: data.arg_type || 'claim',
+        targets: data.targets || [],
         roundNumber: data.round_number,
-        summary: data.summary,
-      }));
-
-      setArguments((prev) => ({
-        ...prev,
-        [side]: [...prev[side], ...newArgs],
-      }));
+      };
+      setArguments((prev) => [...prev, arg]);
     });
 
     es.addEventListener('round_end', (e) => {
+      const data = JSON.parse(e.data);
       setCurrentRound((prev) =>
         prev ? { ...prev, completed: true } : prev
       );
     });
 
-    // Handle both old "judging_start" and new "synthesis_start" events
-    es.addEventListener('judging_start', () => {
-      setStatus('judging');
+    es.addEventListener('reflecting_start', () => {
+      setStatus('reflecting');
+    });
+
+    es.addEventListener('position', (e) => {
+      const data = JSON.parse(e.data);
+      setPositions((prev) => [...prev, {
+        agent_prefix: data.agent_prefix,
+        agent_title: data.agent_title,
+        overall_stance: data.overall_stance,
+        confidence: data.confidence,
+        position_summary: data.position_summary,
+      }]);
     });
 
     es.addEventListener('synthesis_start', () => {
-      setStatus('judging');
+      setStatus('synthesizing');
     });
 
     es.addEventListener('debate_complete', (e) => {
       const data = JSON.parse(e.data);
       setStatus('completed');
-      // New format sends synthesis_preview + confidence_level
-      // Old format sends verdict object
-      if (data.synthesis_preview) {
-        setVerdict({
-          synthesis: {
-            bottom_line: data.synthesis_preview,
-            confidence_level: data.confidence_level || 'uncertain',
-          },
-        });
-      } else {
-        setVerdict(data.verdict);
-      }
+      setSynthesis({
+        bottom_line: data.bottom_line,
+        confidence_level: data.confidence_level || 'uncertain',
+      });
       disconnect();
     });
 
     es.addEventListener('error', (e) => {
-      // SSE error event — could be a server-sent error or connection failure
       if (e.data) {
         try {
           const data = JSON.parse(e.data);
@@ -107,8 +110,7 @@ export default function useDebateStream(debateId) {
     });
 
     es.onerror = () => {
-      // EventSource built-in error (connection lost, etc.)
-      // Don't immediately set error — EventSource auto-reconnects
+      // EventSource built-in error — auto-reconnects
     };
 
     return () => {
@@ -120,7 +122,8 @@ export default function useDebateStream(debateId) {
     status,
     currentRound,
     arguments: arguments_,
-    verdict,
+    positions,
+    synthesis,
     totalRounds,
     error,
     disconnect,

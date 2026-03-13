@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Play, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../api';
 import FormatSelector from '../components/FormatSelector';
-import AgentSetup from '../components/AgentSetup';
+import CouncilSetup from '../components/CouncilSetup';
 
 const emptyAgent = () => ({ mode: 'auto', identity: null, personaId: null });
 
 const statusColors = {
   configuring: 'bg-gray-500/20 text-gray-400',
   running: 'bg-blue-500/20 text-blue-400',
-  judging: 'bg-amber-500/20 text-amber-400',
+  reflecting: 'bg-amber-500/20 text-amber-400',
+  synthesizing: 'bg-violet-500/20 text-violet-400',
   completed: 'bg-green-500/20 text-green-400',
   error: 'bg-red-500/20 text-red-400',
 };
@@ -21,12 +22,9 @@ export default function HomePage() {
   const [topic, setTopic] = useState('');
   const [context, setContext] = useState('');
   const [contextOpen, setContextOpen] = useState(false);
-  const [selectedFormat, setSelectedFormat] = useState('oxford');
-  const [panelSize, setPanelSize] = useState(1);
-  const [agents, setAgents] = useState({
-    pro: [emptyAgent()],
-    con: [emptyAgent()],
-  });
+  const [selectedFormat, setSelectedFormat] = useState('standard');
+  const [councilSize, setCouncilSize] = useState(4);
+  const [agents, setAgents] = useState(Array.from({ length: 4 }, emptyAgent));
   const [generating, setGenerating] = useState(false);
   const [starting, setStarting] = useState(false);
   const [recentDebates, setRecentDebates] = useState([]);
@@ -37,15 +35,12 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-  const handlePanelSizeChange = useCallback((size) => {
-    setPanelSize(size);
+  const handleCouncilSizeChange = useCallback((size) => {
+    setCouncilSize(size);
     setAgents(prev => {
-      const resize = (arr) => {
-        if (arr.length === size) return arr;
-        if (arr.length < size) return [...arr, ...Array(size - arr.length).fill(null).map(emptyAgent)];
-        return arr.slice(0, size);
-      };
-      return { pro: resize(prev.pro), con: resize(prev.con) };
+      if (prev.length === size) return prev;
+      if (prev.length < size) return [...prev, ...Array.from({ length: size - prev.length }, emptyAgent)];
+      return prev.slice(0, size);
     });
   }, []);
 
@@ -56,21 +51,15 @@ export default function HomePage() {
       const res = await api.post('/identities/generate', {
         topic: topic.trim(),
         context: context.trim() || undefined,
-        pro_count: panelSize,
-        con_count: panelSize,
+        council_size: councilSize,
       });
-      setAgents(prev => {
-        const fill = (arr, generated) =>
-          arr.map((agent, i) =>
-            agent.mode === 'auto'
-              ? { ...agent, identity: generated[i] || agent.identity }
-              : agent
-          );
-        return {
-          pro: fill(prev.pro, res.data.pro),
-          con: fill(prev.con, res.data.con),
-        };
-      });
+      setAgents(prev =>
+        prev.map((agent, i) =>
+          agent.mode === 'auto'
+            ? { ...agent, identity: res.data.council[i] || agent.identity }
+            : agent
+        )
+      );
     } catch {
       // TODO: show error toast
     } finally {
@@ -79,18 +68,17 @@ export default function HomePage() {
   }
 
   function allSlotsFilled() {
-    const check = (arr) => arr.every(a => {
+    return agents.every(a => {
       if (a.mode === 'manual') return !!a.identity?.title?.trim();
       return !!a.identity;
     });
-    return check(agents.pro) && check(agents.con);
   }
 
-  async function handleStartDebate() {
+  async function handleStartDeliberation() {
     if (!topic.trim() || !allSlotsFilled()) return;
     setStarting(true);
     try {
-      const buildAgentInput = (agent) => {
+      const agentInputs = agents.map(agent => {
         if (agent.personaId) return { persona_id: agent.personaId };
         return {
           title: agent.identity.title,
@@ -99,16 +87,14 @@ export default function HomePage() {
           style: agent.identity.style,
           background: agent.identity.background || '',
         };
-      };
+      });
 
       const res = await api.post('/debates', {
         topic: topic.trim(),
         context: context.trim() || undefined,
         format_name: selectedFormat,
-        agents: {
-          pro: agents.pro.map(buildAgentInput),
-          con: agents.con.map(buildAgentInput),
-        },
+        council_size: councilSize,
+        agents: agentInputs,
       });
 
       const debateId = res.data.id;
@@ -130,7 +116,7 @@ export default function HomePage() {
           type="text"
           value={topic}
           onChange={e => setTopic(e.target.value)}
-          placeholder="What decision should we explore?"
+          placeholder="What should the council deliberate on?"
           className="w-full px-5 py-4 text-lg bg-white/[0.03] border border-white/10 rounded-xl text-gray-100 placeholder-gray-600 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 focus:outline-none transition-all"
         />
         <button
@@ -144,7 +130,7 @@ export default function HomePage() {
           <textarea
             value={context}
             onChange={e => setContext(e.target.value)}
-            placeholder="Provide any additional context, constraints, or framing for the debate..."
+            placeholder="Provide any additional context, constraints, or framing for the deliberation..."
             rows={3}
             className="w-full mt-2 px-4 py-3 text-sm bg-white/[0.03] border border-white/10 rounded-lg text-gray-200 placeholder-gray-600 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 focus:outline-none resize-none transition-all"
             style={{ animation: 'fadeIn 0.2s ease-in' }}
@@ -154,14 +140,14 @@ export default function HomePage() {
 
       {/* Section 2: Format */}
       <section>
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Debate Format</h2>
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Deliberation Format</h2>
         <FormatSelector selected={selectedFormat} onSelect={setSelectedFormat} />
       </section>
 
-      {/* Section 3: Agent Setup */}
+      {/* Section 3: Council Setup */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Agent Identities</h2>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Council Members</h2>
           <button
             onClick={handleAutoGenerate}
             disabled={!canGenerate}
@@ -170,19 +156,19 @@ export default function HomePage() {
             {generating ? (
               <>
                 <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
-                Generating...
+                Generating Council...
               </>
             ) : (
               <>
                 <Sparkles size={16} />
-                Auto-Generate All Identities
+                Auto-Generate Council
               </>
             )}
           </button>
         </div>
-        <AgentSetup
-          panelSize={panelSize}
-          onPanelSizeChange={handlePanelSizeChange}
+        <CouncilSetup
+          councilSize={councilSize}
+          onCouncilSizeChange={handleCouncilSizeChange}
           agents={agents}
           onAgentsChange={setAgents}
         />
@@ -191,28 +177,28 @@ export default function HomePage() {
       {/* Start Button */}
       <div className="flex justify-center pt-2">
         <button
-          onClick={handleStartDebate}
+          onClick={handleStartDeliberation}
           disabled={!canStart}
           className="flex items-center gap-2.5 px-8 py-3.5 text-base font-semibold rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30"
         >
           {starting ? (
             <>
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Creating Debate...
+              Starting Deliberation...
             </>
           ) : (
             <>
               <Play size={18} fill="currentColor" />
-              Start Debate
+              Start Deliberation
             </>
           )}
         </button>
       </div>
 
-      {/* Recent Debates */}
+      {/* Recent Deliberations */}
       {recentDebates.length > 0 && (
         <section className="pt-4 border-t border-white/5">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Debates</h2>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Deliberations</h2>
           <div className="space-y-2">
             {recentDebates.map(d => (
               <button
@@ -222,11 +208,9 @@ export default function HomePage() {
               >
                 <span className="text-sm text-gray-300 truncate">{d.topic}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  {d.verdict?.synthesis && (
-                    <span className="text-[10px] text-gray-500 capitalize">
-                      {d.verdict.synthesis.confidence_level || 'analyzed'}
-                    </span>
-                  )}
+                  <span className="text-[10px] text-gray-600">
+                    {d.council_size} members
+                  </span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusColors[d.status] || 'bg-gray-500/20 text-gray-400'}`}>
                     {d.status}
                   </span>

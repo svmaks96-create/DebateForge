@@ -6,10 +6,26 @@ import useDebateStream from '../hooks/useDebateStream';
 import LiveViewer from '../components/LiveViewer';
 import AnalysisDashboard from '../components/AnalysisDashboard';
 
+const SEAT_COLORS = {
+  A: { bg: 'bg-[#3B82F6]/10 border-[#3B82F6]/20', text: 'text-[#3B82F6]' },
+  B: { bg: 'bg-[#F59E0B]/10 border-[#F59E0B]/20', text: 'text-[#F59E0B]' },
+  C: { bg: 'bg-[#10B981]/10 border-[#10B981]/20', text: 'text-[#10B981]' },
+  D: { bg: 'bg-[#8B5CF6]/10 border-[#8B5CF6]/20', text: 'text-[#8B5CF6]' },
+  E: { bg: 'bg-[#F43F5E]/10 border-[#F43F5E]/20', text: 'text-[#F43F5E]' },
+  F: { bg: 'bg-[#06B6D4]/10 border-[#06B6D4]/20', text: 'text-[#06B6D4]' },
+};
+
+const STANCE_COLORS = {
+  supportive: 'text-green-400',
+  critical: 'text-red-400',
+  mixed: 'text-amber-400',
+  uncertain: 'text-gray-400',
+};
+
 const roundTypeLabels = {
   opening: 'Opening',
-  rebuttal: 'Rebuttal',
-  cross_exam: 'Cross-Examination',
+  discussion: 'Discussion',
+  exploration: 'Exploration',
   closing: 'Closing',
 };
 
@@ -27,33 +43,27 @@ const confidenceBadgeColors = {
   uncertain: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
 
-function SynthesisBanner({ verdict }) {
-  if (!verdict) return null;
+function SynthesisBanner({ synthesis }) {
+  if (!synthesis) return null;
+  const confidence = synthesis.confidence_level || synthesis.bottom_line ? 'uncertain' : null;
+  if (!synthesis.bottom_line) return null;
 
-  const synthesis = verdict.synthesis;
-  if (!synthesis) {
-    // Legacy verdict — show minimal fallback
-    return <LegacyVerdictBanner verdict={verdict} />;
-  }
-
-  const confidence = synthesis.confidence_level || 'uncertain';
-  const bannerCls = confidenceBannerColors[confidence] || confidenceBannerColors.uncertain;
-  const badgeCls = confidenceBadgeColors[confidence] || confidenceBadgeColors.uncertain;
+  const level = synthesis.confidence_level || 'uncertain';
+  const bannerCls = confidenceBannerColors[level] || confidenceBannerColors.uncertain;
+  const badgeCls = confidenceBadgeColors[level] || confidenceBadgeColors.uncertain;
 
   return (
     <div className={`rounded-xl border bg-gradient-to-r ${bannerCls} p-5 mb-6`}>
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           <FileText size={24} className="mt-0.5 flex-shrink-0 text-gray-300" />
-          <div className="min-w-0">
-            <p className="text-sm text-gray-200 leading-relaxed font-medium">
-              {synthesis.bottom_line}
-            </p>
-          </div>
+          <p className="text-sm text-gray-200 leading-relaxed font-medium">
+            {synthesis.bottom_line}
+          </p>
         </div>
         <div className="flex-shrink-0">
           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${badgeCls}`}>
-            {confidence.charAt(0).toUpperCase() + confidence.slice(1)} confidence
+            {level.charAt(0).toUpperCase() + level.slice(1)} confidence
           </span>
         </div>
       </div>
@@ -61,57 +71,38 @@ function SynthesisBanner({ verdict }) {
   );
 }
 
-function LegacyVerdictBanner({ verdict }) {
-  const winner = verdict.verdict;
-  const score = verdict.score || {};
-
-  const colorMap = {
-    PRO: 'from-blue-600/30 to-blue-900/20 border-blue-500/40',
-    CON: 'from-amber-600/30 to-amber-900/20 border-amber-500/40',
-    DRAW: 'from-gray-600/30 to-gray-900/20 border-gray-500/40',
-  };
-  const textMap = {
-    PRO: 'text-blue-300',
-    CON: 'text-amber-300',
-    DRAW: 'text-gray-300',
-  };
-
-  if (!winner) return null;
+function CouncilBadge({ member }) {
+  const prefix = member.argument_prefix;
+  const color = SEAT_COLORS[prefix] || SEAT_COLORS.A;
 
   return (
-    <div className={`rounded-xl border bg-gradient-to-r ${colorMap[winner] || colorMap.DRAW} p-5 mb-6`}>
-      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-        <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className="min-w-0">
-            <div className={`text-xl font-bold ${textMap[winner] || 'text-gray-300'}`}>
-              {winner === 'DRAW' ? 'Draw' : `${winner} Wins`}
-            </div>
-            {verdict.executive_summary && (
-              <p className="text-sm text-gray-400 mt-1">{verdict.executive_summary}</p>
-            )}
-          </div>
-        </div>
-        <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-blue-400 font-medium">PRO {score.pro ?? '–'}</span>
-            <span className="text-gray-600">vs</span>
-            <span className="text-amber-400 font-medium">CON {score.con ?? '–'}</span>
-          </div>
-        </div>
-      </div>
+    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${color.bg}`}>
+      <span className={`text-xs font-bold ${color.text}`}>{prefix}</span>
+      <span className="text-xs text-gray-300 truncate max-w-[140px]">{member.title}</span>
     </div>
   );
 }
 
-function AgentBadge({ agent, side }) {
-  const isPro = side === 'pro';
-  const bg = isPro ? 'bg-blue-500/10 border-blue-500/20' : 'bg-amber-500/10 border-amber-500/20';
-  const prefixColor = isPro ? 'text-blue-400' : 'text-amber-400';
+function PositionCard({ position }) {
+  const prefix = position.agent_prefix;
+  const color = SEAT_COLORS[prefix] || SEAT_COLORS.A;
+  const stanceColor = STANCE_COLORS[position.overall_stance] || STANCE_COLORS.uncertain;
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${bg}`}>
-      <span className={`text-xs font-bold ${prefixColor}`}>{agent.argument_prefix}</span>
-      <span className="text-xs text-gray-300 truncate max-w-[140px]">{agent.title}</span>
+    <div className={`border-l-2 rounded-r-lg p-4 bg-white/[0.03] animate-arg-in`}
+      style={{ borderLeftColor: prefix === 'A' ? '#3B82F6' : prefix === 'B' ? '#F59E0B' : prefix === 'C' ? '#10B981' : prefix === 'D' ? '#8B5CF6' : prefix === 'E' ? '#F43F5E' : '#06B6D4' }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${color.bg} ${color.text}`}>
+          {prefix}
+        </span>
+        <span className="text-xs text-gray-400">{position.agent_title}</span>
+        <span className={`text-xs font-medium ${stanceColor}`}>
+          {position.overall_stance}
+        </span>
+        <span className="text-[10px] text-gray-500 font-mono">{position.confidence}/10</span>
+      </div>
+      <p className="text-sm text-gray-200 leading-relaxed">{position.position_summary}</p>
     </div>
   );
 }
@@ -137,8 +128,14 @@ function StatusBar({ status, currentRound, totalRounds, formatName }) {
           Live
         </span>
       )}
-      {status === 'judging' && (
-        <span className="flex items-center gap-1.5 text-amber-400">
+      {status === 'reflecting' && (
+        <span className="flex items-center gap-1.5 text-blue-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+          Final Positions
+        </span>
+      )}
+      {status === 'synthesizing' && (
+        <span className="flex items-center gap-1.5 text-violet-400">
           <FileText size={12} />
           Synthesizing…
         </span>
@@ -149,15 +146,6 @@ function StatusBar({ status, currentRound, totalRounds, formatName }) {
       {status === 'error' && (
         <span className="text-red-400">Error</span>
       )}
-    </div>
-  );
-}
-
-function SynthesizingOverlay() {
-  return (
-    <div className="flex items-center justify-center gap-3 py-8 my-4 rounded-xl border border-violet-500/20 bg-violet-500/5">
-      <FileText size={20} className="text-violet-400 animate-pulse" />
-      <span className="text-violet-300 font-medium">Synthesizing insights…</span>
     </div>
   );
 }
@@ -183,7 +171,7 @@ export default function DebatePage() {
         setLoading(false);
       })
       .catch((err) => {
-        setFetchError(err.response?.data?.detail || 'Failed to load debate');
+        setFetchError(err.response?.data?.detail || 'Failed to load deliberation');
         setLoading(false);
       });
   }, [id]);
@@ -217,43 +205,45 @@ export default function DebatePage() {
     : debate.status;
 
   // Build arguments from the right source
-  let displayArgs;
+  let displayArgs = [];
   let displayRounds = [];
-  let displayVerdict;
+  let displaySynthesis = null;
+  let displayPositions = [];
 
-  if (isLive && stream.arguments.pro.length + stream.arguments.con.length > 0) {
-    // Use streamed arguments
+  if (isLive && stream.arguments.length > 0) {
+    // Use streamed arguments (flat array)
     displayArgs = stream.arguments;
-    displayVerdict = stream.verdict;
+    displaySynthesis = stream.synthesis;
+    displayPositions = stream.positions;
   } else if (debate.rounds && debate.rounds.length > 0) {
     // Build from fetched debate detail (review mode)
-    const pro = [];
-    const con = [];
+    const councilMembers = debate.council_members || [];
     displayRounds = debate.rounds;
 
     for (const round of debate.rounds) {
       for (const arg of round.arguments || []) {
-        // Find the agent for this argument
-        const agent = (debate.agents || []).find((a) => a.id === arg.agent_id);
-        const enriched = {
+        const agent = councilMembers.find((a) => a.id === arg.agent_id);
+        displayArgs.push({
           ...arg,
-          id: arg.argument_index,
-          type: arg.arg_type,
+          argument_index: arg.argument_index,
+          arg_type: arg.arg_type,
           agentPrefix: agent?.argument_prefix || '?',
           agentTitle: agent?.title || 'Agent',
           roundNumber: round.round_number,
           roundType: round.round_type,
           round_number: round.round_number,
-        };
-        if (arg.agent_side === 'pro') pro.push(enriched);
-        else con.push(enriched);
+        });
       }
     }
-    displayArgs = { pro, con };
-    displayVerdict = debate.verdict;
+
+    // For completed debates, synthesis comes from the debate object
+    if (debate.synthesis?.synthesis) {
+      displaySynthesis = debate.synthesis.synthesis;
+    }
   } else {
-    displayArgs = isLive ? stream.arguments : { pro: [], con: [] };
-    displayVerdict = isLive ? stream.verdict : debate.verdict;
+    displayArgs = isLive ? stream.arguments : [];
+    displaySynthesis = isLive ? stream.synthesis : (debate.synthesis?.synthesis || null);
+    displayPositions = isLive ? stream.positions : [];
   }
 
   const currentRound = isLive ? stream.currentRound : null;
@@ -261,12 +251,10 @@ export default function DebatePage() {
     ? stream.totalRounds
     : debate.format_config?.rounds?.length || 0;
   const formatName = debate.format_config?.format_name || '';
-  const agents = debate.agents || [];
-  const proAgents = agents.filter((a) => a.side === 'pro');
-  const conAgents = agents.filter((a) => a.side === 'con');
+  const councilMembers = debate.council_members || [];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
       {/* Back link */}
       <button
         onClick={() => navigate('/')}
@@ -286,27 +274,19 @@ export default function DebatePage() {
         formatName={formatName}
       />
 
-      {/* Agent badges */}
-      {agents.length > 0 && (
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 flex-wrap">
-            {proAgents.map((a) => (
-              <AgentBadge key={a.id} agent={a} side="pro" />
-            ))}
-          </div>
-          <span className="text-gray-600 text-xs font-medium">vs</span>
-          <div className="flex items-center gap-2 flex-wrap">
-            {conAgents.map((a) => (
-              <AgentBadge key={a.id} agent={a} side="con" />
-            ))}
-          </div>
+      {/* Council member badges */}
+      {councilMembers.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {councilMembers.map((m) => (
+            <CouncilBadge key={m.id} member={m} />
+          ))}
         </div>
       )}
 
-      {/* Synthesis/verdict banner + jump to analysis */}
-      {effectiveStatus === 'completed' && displayVerdict && (
+      {/* Synthesis banner + jump to analysis */}
+      {effectiveStatus === 'completed' && displaySynthesis && (
         <div>
-          <SynthesisBanner verdict={displayVerdict} />
+          <SynthesisBanner synthesis={displaySynthesis} />
           <div className="flex justify-end -mt-4 mb-2">
             <button
               type="button"
@@ -319,34 +299,43 @@ export default function DebatePage() {
         </div>
       )}
 
-      {/* Synthesizing overlay */}
-      {effectiveStatus === 'judging' && <SynthesizingOverlay />}
-
       {/* Configuring state */}
       {effectiveStatus === 'configuring' && (
         <div className="flex items-center justify-center gap-3 py-12 text-gray-500">
           <Loader size={18} className="animate-spin" />
-          <span>Waiting for debate to start…</span>
+          <span>Waiting for deliberation to start…</span>
         </div>
       )}
 
-      {/* Arguments */}
+      {/* Arguments — conversation thread */}
       {effectiveStatus !== 'configuring' && (
         <LiveViewer
           arguments={displayArgs}
           animate={isLive}
+          status={effectiveStatus}
           rounds={displayRounds}
         />
       )}
 
+      {/* Position cards during reflecting phase */}
+      {(effectiveStatus === 'reflecting' || effectiveStatus === 'synthesizing' || effectiveStatus === 'completed') && displayPositions.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            Final Positions
+          </h3>
+          {displayPositions.map((pos) => (
+            <PositionCard key={pos.agent_prefix} position={pos} />
+          ))}
+        </div>
+      )}
+
       {/* Analysis dashboard for completed debates */}
-      {effectiveStatus === 'completed' && displayVerdict && (
+      {effectiveStatus === 'completed' && (
         <div ref={analysisRef} className="mt-8 border-t border-white/10 pt-6">
           <AnalysisDashboard
             debateId={id}
-            verdict={displayVerdict}
-            arguments={displayArgs}
-            agents={agents}
+            synthesis={displaySynthesis}
+            councilMembers={councilMembers}
           />
         </div>
       )}

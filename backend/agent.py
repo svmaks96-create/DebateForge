@@ -12,66 +12,66 @@ MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2000
 
 
-class DebateAgent:
+class CouncilAgent:
     def __init__(
         self,
-        side: str,
         identity: dict,
         topic: str,
         context: str | None,
         argument_prefix: str,
-        panel_teammates: list | None = None,
+        seat_number: int,
+        council_members: list[dict],
     ):
-        self.side = side
         self.identity = identity
         self.topic = topic
         self.context = context
         self.argument_prefix = argument_prefix
-        self.panel_teammates = panel_teammates or []
+        self.seat_number = seat_number
+        self.council_members = council_members
         self.client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     def _build_system_prompt(self) -> str:
-        side_label = "FOR" if self.side == "pro" else "AGAINST"
         identity = self.identity
+        title = identity.get("title", "Analyst")
 
         prompt = f"""\
-You are a thoughtful analyst exploring the proposition from the {side_label} perspective.
-Your role is to make the strongest honest case for your position, but you are NOT
-trying to "win" — you are trying to help uncover the truth.
+You are {title}, participating in a council deliberation as an independent expert.
+Your position on the topic is NOT pre-assigned — it emerges naturally from your role,
+expertise, and priorities. You may be supportive, critical, mixed, or neutral on any point.
 
 Your identity:
-- Title: {identity.get('title', 'Analyst')}
+- Title: {title}
 - Expertise: {identity.get('expertise', 'General')}
 - Priorities: {identity.get('priorities', 'Truth-seeking')}
 - Style: {identity.get('style', 'Balanced')}
 - Background: {identity.get('background', '')}
 
-CRITICAL PRINCIPLES:
-1. If the opposing side makes a genuinely strong point, acknowledge it openly.
-2. Flag when your own arguments have weaknesses or uncertainties.
-3. Rate your own confidence (0-10) on each argument honestly.
-4. Concede gracefully when evidence goes against your position, but add nuance if warranted.
-5. Your goal is to contribute to a complete, honest exploration of this topic.
-6. Distinguish between what you're confident about vs what's genuinely uncertain.
+Other council members at the table:"""
 
-Rules:
-1. Structure every argument using the Toulmin model: claim, grounds, warrant, backing, qualifier.
-2. Number your arguments with your prefix "{self.argument_prefix}" (e.g., {self.argument_prefix}1, {self.argument_prefix}2).
-3. Reference opposing arguments by their IDs (e.g., "Responding to B1...").
-4. Do NOT use logical fallacies — argue with evidence and sound reasoning.
-5. Vary your arguments across rounds — do not repeat the same points.
-6. Stay in character: argue from your expertise and priorities."""
-
-        if self.panel_teammates:
-            prompt += "\n\nPanel coordination — you are part of a team. Your teammates:"
-            for tm in self.panel_teammates:
-                prompt += f"\n- {tm.get('title', 'Teammate')} ({tm.get('expertise', '')})"
-            prompt += (
-                "\n\nDo NOT repeat points your teammates have already made this round. "
-                "Build on their arguments or cover different angles."
-            )
+        for member in self.council_members:
+            if member["seat_number"] == self.seat_number:
+                continue
+            prefix = chr(ord("A") + member["seat_number"])
+            prompt += f"\n- Seat {member['seat_number'] + 1} ({prefix}): {member.get('title', 'Member')} — {member.get('expertise', '')}"
 
         prompt += f"""
+
+PRINCIPLES:
+1. Your position emerges from your expertise and priorities — you are NOT assigned a side.
+2. For each argument, honestly label your stance: supportive | critical | mixed | neutral.
+3. Rate your confidence 0-10 on each argument honestly.
+4. Acknowledge strong points from other members, even when you disagree overall.
+5. Flag genuine uncertainties and limitations in your own reasoning.
+6. You may agree, disagree, question, or build on any other member's points.
+7. Distinguish between what you're confident about vs what's genuinely uncertain.
+
+RULES:
+1. Structure every argument using the Toulmin model: claim, grounds, warrant, backing, qualifier.
+2. Number your arguments with your prefix "{self.argument_prefix}" (e.g., {self.argument_prefix}1, {self.argument_prefix}2).
+3. Reference other members' arguments by their IDs (e.g., "Responding to B1...").
+4. Do NOT use logical fallacies — argue with evidence and sound reasoning.
+5. Vary your arguments across rounds — do not repeat the same points.
+6. Stay in character: argue from your expertise and priorities.
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
 Format:
@@ -79,7 +79,8 @@ Format:
   "arguments": [
     {{
       "id": "{self.argument_prefix}1",
-      "type": "claim|rebuttal|concession|concession_with_nuance",
+      "type": "claim|rebuttal|concession|concession_with_nuance|question|build_on",
+      "stance": "supportive|critical|mixed|neutral",
       "targets": [],
       "claim": "Your main claim",
       "grounds": "Evidence and data supporting the claim",
@@ -89,45 +90,44 @@ Format:
       "confidence": 7
     }}
   ],
-  "summary": "Brief summary of your position this round"
+  "summary": "Brief summary of your perspective this round"
 }}
 
-The "confidence" field is required: an integer 0-10 reflecting how genuinely confident you are in each argument.
-The "type" field can be "concession_with_nuance" when you concede an opposing point but add important caveats."""
+The "confidence" field is required: an integer 0-10 reflecting how genuinely confident you are.
+The "stance" field is required: how you feel about this particular point.
+The "type" field options:
+- "claim": a new point or assertion
+- "rebuttal": directly countering another member's argument
+- "concession": acknowledging another member's point is valid
+- "concession_with_nuance": conceding but adding important caveats
+- "question": raising a question for the council to consider
+- "build_on": extending or strengthening another member's argument"""
         return prompt
 
     def _build_user_message(
         self,
         round_type: str,
         round_number: int,
-        debate_history: list[dict],
-        teammate_args_this_round: list[dict] | None = None,
+        conversation_history: list[dict],
     ) -> str:
         msg = f"Topic: {self.topic}\n"
         if self.context:
             msg += f"Context: {self.context}\n"
         msg += f"Round: {round_number} ({round_type})\n"
 
-        if debate_history:
-            msg += "\n--- Debate history ---\n"
-            for entry in debate_history:
-                side = entry.get("side", "?")
-                agent_title = entry.get("title", "Agent")
-                msg += f"\n[{side.upper()} — {agent_title}]"
+        if conversation_history:
+            msg += "\n--- Conversation history ---\n"
+            for entry in conversation_history:
+                agent_prefix = entry.get("agent_prefix", "?")
+                agent_title = entry.get("agent_title", "Member")
+                msg += f"\n[{agent_prefix} — {agent_title}]"
                 for arg in entry.get("arguments", []):
-                    msg += f"\n  {arg.get('id', '?')}: {arg.get('claim', '')}"
+                    stance = arg.get("stance", "neutral")
+                    confidence = arg.get("confidence", "?")
+                    msg += f"\n  {arg.get('id', '?')} [{stance}, confidence:{confidence}]: {arg.get('claim', '')}"
                 if entry.get("summary"):
                     msg += f"\n  Summary: {entry['summary']}"
             msg += "\n--- End history ---\n"
-
-        if teammate_args_this_round:
-            msg += "\n--- Your teammates' arguments this round ---\n"
-            for tm_arg in teammate_args_this_round:
-                agent_title = tm_arg.get("title", "Teammate")
-                msg += f"\n[{agent_title}]"
-                for arg in tm_arg.get("arguments", []):
-                    msg += f"\n  {arg.get('id', '?')}: {arg.get('claim', '')}"
-            msg += "\n--- End teammate args ---\n"
 
         msg += f"\nPresent your {round_type} arguments now."
         return msg
@@ -136,12 +136,11 @@ The "type" field can be "concession_with_nuance" when you concede an opposing po
         self,
         round_type: str,
         round_number: int,
-        debate_history: list[dict],
-        teammate_args_this_round: list[dict] | None = None,
+        conversation_history: list[dict],
     ) -> dict:
         system_prompt = self._build_system_prompt()
         user_message = self._build_user_message(
-            round_type, round_number, debate_history, teammate_args_this_round
+            round_type, round_number, conversation_history
         )
 
         for attempt in range(2):
@@ -160,6 +159,107 @@ The "type" field can be "concession_with_nuance" when you concede an opposing po
                     continue
                 logger.error("Claude API error on attempt 2, raising: %s", e)
                 raise
+
+    async def generate_final_position(
+        self,
+        conversation_history: list[dict],
+    ) -> dict:
+        identity = self.identity
+        title = identity.get("title", "Analyst")
+
+        system_prompt = f"""\
+You are {title}. The council deliberation has concluded. Reflect on the full discussion
+and state your final position.
+
+Your identity:
+- Title: {title}
+- Expertise: {identity.get('expertise', 'General')}
+- Priorities: {identity.get('priorities', 'Truth-seeking')}
+- Style: {identity.get('style', 'Balanced')}
+- Background: {identity.get('background', '')}
+
+You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
+Format:
+{{
+  "overall_stance": "supportive|critical|mixed|uncertain",
+  "confidence": 7,
+  "position_summary": "2-3 sentence summary of your final position",
+  "key_concerns": [
+    {{"concern": "Description of concern", "severity": "high|medium|low"}}
+  ],
+  "key_supports": [
+    {{"point": "Description of supporting point", "confidence": 8}}
+  ],
+  "would_change_mind": "What evidence or arguments would change your position"
+}}
+
+Be honest. If the deliberation changed your thinking, say so. If you remain firm, explain why."""
+
+        msg = f"Topic: {self.topic}\n"
+        if self.context:
+            msg += f"Context: {self.context}\n"
+
+        msg += "\n--- Full deliberation transcript ---\n"
+        for entry in conversation_history:
+            agent_prefix = entry.get("agent_prefix", "?")
+            agent_title = entry.get("agent_title", "Member")
+            msg += f"\n[{agent_prefix} — {agent_title}]"
+            for arg in entry.get("arguments", []):
+                stance = arg.get("stance", "neutral")
+                confidence = arg.get("confidence", "?")
+                msg += f"\n  {arg.get('id', '?')} [{stance}, confidence:{confidence}]: {arg.get('claim', '')}"
+            if entry.get("summary"):
+                msg += f"\n  Summary: {entry['summary']}"
+        msg += "\n--- End transcript ---\n"
+
+        msg += "\nState your final position now."
+
+        for attempt in range(2):
+            try:
+                response = await self.client.messages.create(
+                    model=MODEL,
+                    max_tokens=MAX_TOKENS,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": msg}],
+                )
+                raw_text = response.content[0].text
+                return self._parse_position_response(raw_text)
+            except anthropic.APIError as e:
+                if attempt == 0:
+                    logger.warning("Claude API error on attempt 1, retrying: %s", e)
+                    continue
+                logger.error("Claude API error on attempt 2, raising: %s", e)
+                raise
+
+    def _parse_position_response(self, raw_text: str) -> dict:
+        # Try 1: direct JSON parse
+        try:
+            data = json.loads(raw_text)
+            if "overall_stance" in data:
+                return data
+        except json.JSONDecodeError:
+            pass
+
+        # Try 2: extract from markdown code block
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group(1))
+                if "overall_stance" in data:
+                    return data
+            except json.JSONDecodeError:
+                pass
+
+        # Try 3: fallback
+        logger.warning("Could not parse position response as JSON, using fallback")
+        return {
+            "overall_stance": "uncertain",
+            "confidence": 5,
+            "position_summary": raw_text[:300],
+            "key_concerns": [],
+            "key_supports": [],
+            "would_change_mind": "Unable to parse structured response",
+        }
 
     def parse_response(self, raw_text: str) -> dict:
         # Try 1: direct JSON parse
@@ -187,6 +287,7 @@ The "type" field can be "concession_with_nuance" when you concede an opposing po
                 {
                     "id": f"{self.argument_prefix}1",
                     "type": "claim",
+                    "stance": "neutral",
                     "targets": [],
                     "claim": raw_text[:200],
                     "grounds": "",

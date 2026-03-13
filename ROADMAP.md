@@ -1,23 +1,26 @@
 # DebateForge — Feature Roadmap
 
 > Last updated: March 2026
-> Status: v2 dialectical exploration platform deployed and working
+> Status: v3 council deliberation platform deployed and working
 
 > **For the 4 priority analysis quality upgrades (Evidence Mode, Adversarial Verification,
 > Position Evolution, Decision Frameworks), see QUALITY_UPGRADES_PLAN.md**
 
 ---
 
-## Current State (v2 — Dialectical Exploration)
+## Current State (v3 — Council Deliberation)
 
-- AI-vs-AI dialectical exploration: agents are truth-seekers, not competitive debaters
-- Agents concede freely when evidence is stronger and rate their own confidence (0-10) per argument
-- Structured Toulmin-model arguments with self-assessed confidence scores
-- Synthesizer produces balanced insight: areas of agreement, unresolved tensions, key insights, evidence gaps
-- Panel format (1v1 up to 4v4) with distinct agent identities
-- Auto-generated or manual identities, with persona library
-- Real-time SSE streaming of debates
-- React frontend: gate, launcher, live viewer, analysis dashboard, history, persona library
+- AI council deliberation: 2-6 independent expert agents discuss a topic
+- Agents form positions from their identity, expertise, and priorities — no assigned sides
+- Per-argument stance labels: supportive, critical, mixed, neutral
+- Self-assessed confidence scoring (0-10) per argument
+- Structured Toulmin-model arguments
+- Final position statements from each agent after discussion rounds
+- Theme-based synthesis: themes with perspectives, consensus levels, key tensions, blind spots, insights
+- Deliberation formats: quick_take, rapid_assessment, standard, deep_dive
+- Auto-generated or manual council members, with persona library
+- Real-time SSE streaming of deliberations
+- React frontend: gate, launcher, live viewer (conversation thread), analysis dashboard (5 tabs), history, persona library
 - Deployed on VPS at http://<IP>:8080, behind invite code auth
 
 ---
@@ -31,7 +34,7 @@ are real, relevant, and correctly interpreted.
 ### How It Works
 
 1. **Agent gets web search tool access**
-   - Use Claude's tool_use feature to give debating agents a web search tool
+   - Use Claude's tool_use feature to give council agents a web search tool
    - Agent decides when to search based on what claim it's making
    - Agent cites sources inline: each argument's `backing` field includes URLs and source summaries
 
@@ -85,7 +88,7 @@ are real, relevant, and correctly interpreted.
 **API cost impact:**
 - Each agent call may trigger 1-3 web searches
 - Search API costs (~$0.003-0.01 per search via Brave/Tavily)
-- Total additional cost per debate: ~$0.05-0.20
+- Total additional cost per deliberation: ~$0.05-0.20
 
 **Estimated effort:** 6-8 hours
 
@@ -93,9 +96,9 @@ are real, relevant, and correctly interpreted.
 
 ## Priority 2: Quick Wins & Polish
 
-### Export Debates as PDF
+### Export Deliberations as PDF
 - Add `GET /api/debates/{id}/export?format=pdf` endpoint
-- Generate a clean report: topic, agents, all arguments, synthesis analysis
+- Generate a clean report: topic, council members, all arguments, synthesis analysis
 - Use WeasyPrint or reportlab in Python
 - Add "Export PDF" button on DebatePage
 - **Effort:** 2-3 hours
@@ -107,15 +110,14 @@ are real, relevant, and correctly interpreted.
 - **Effort:** 30 minutes
 
 ### Mobile Responsive Layout
-- The split-panel LiveViewer doesn't work well on small screens
-- Switch to stacked layout (pro above con) on mobile
+- Conversation thread layout already works better on mobile than split-panel
 - Collapsible argument cards on mobile
-- **Effort:** 2 hours
+- **Effort:** 1-2 hours
 
-### Debate Templates
-- Save a topic + format + agents combo as a reusable template
-- New DB table: `debate_templates`
-- "Save as Template" button on completed debates
+### Deliberation Templates
+- Save a topic + format + council combo as a reusable template
+- New DB table: `deliberation_templates`
+- "Save as Template" button on completed deliberations
 - Template picker on HomePage alongside format selector
 - **Effort:** 2-3 hours
 
@@ -128,32 +130,32 @@ are real, relevant, and correctly interpreted.
 
 ## Priority 3: Meaningful Upgrades
 
-### Human-vs-AI Mode
-- User argues one side, AI argues the other
+### Human-in-the-Council Mode
+- User joins as a council member alongside AI agents
 - DebatePage gets a text input for the human's turn
-- Debate engine waits for human input between AI turns
-- Synthesizer evaluates both human and AI arguments equally
+- Deliberation engine waits for human input between AI turns
+- Synthesizer evaluates all council members equally
 - WebSocket may be needed (SSE is server→client only)
 - **Effort:** 8-10 hours
 
 ### Argument Graph Visualization (D3)
 - Force-directed graph of all arguments
-- Nodes = arguments, sized by strength, colored by side
-- Edges = rebuttals (red), supports (green), depends-on (gray)
+- Nodes = arguments, sized by confidence, colored by agent
+- Edges = rebuttals (red), supports (green), builds-on (blue)
 - Click node → shows Toulmin breakdown
 - Zoom, pan, hover for details
 - **Effort:** 4-6 hours
 
-### Debate Comparison Mode
-- Run same topic with different formats, agents, or panel sizes
-- Side-by-side results view: did the synthesis change? Which arguments appeared in one but not the other?
+### Deliberation Comparison Mode
+- Run same topic with different formats, council compositions, or sizes
+- Side-by-side results view: did the synthesis change? Which themes appeared in one but not the other?
 - Useful for testing decision robustness
 - **Effort:** 4-5 hours
 
 ### Real-Time Cost Counter
 - Track token usage per Claude API call
-- Display running cost estimate in the UI during debate
-- Show total cost on completed debate page
+- Display running cost estimate in the UI during deliberation
+- Show total cost on completed deliberation page
 - Store token counts in DB for analytics
 - **Effort:** 2-3 hours
 
@@ -162,23 +164,22 @@ are real, relevant, and correctly interpreted.
 ## Priority 4: Ambitious Expansions
 
 ### Slack/Teams Integration
-- Slash command: `/debateforge "Should we adopt K8s?" --format oxford --agents auto`
+- Slash command: `/debateforge "Should we adopt K8s?" --format standard --council 4`
 - Bot posts live updates to a thread
 - Link to full analysis on web UI
 - Uses Slack Bot API or Teams webhook
 - **Effort:** 1-2 days
 
-### Human Intervention Mid-Debate
-- "Inject Argument" button during live debate
+### Human Intervention Mid-Deliberation
+- "Inject Argument" button during live deliberation
 - Human writes an argument, agents must respond to it in next round
 - Combines human insight with AI thoroughness
 - **Effort:** 6-8 hours
 
-### Tournament Mode
-- Define N topics, run debates bracket-style
-- Semi-finals, finals — each round's winner advances
-- Leaderboard of most contentious / most decisive topics
-- Fun for team offsites
+### Multi-Topic Council Sessions
+- Define N related topics, council discusses each in sequence
+- Cross-topic synthesis: patterns, contradictions, overarching themes
+- Useful for strategic planning sessions
 - **Effort:** 1-2 days
 
 ### Fine-Tuned Scoring Model
@@ -200,8 +201,8 @@ If continuing development:
    d. Adversarial Verification (4-5 hrs) — fact-checker agent, builds on evidence mode
 2. Markdown rendering (30 min) — immediate visual improvement
 3. Export as PDF (2-3 hrs) — most requested by stakeholders
-4. Mobile responsive (2 hrs) — accessibility
+4. Mobile responsive (1-2 hrs) — accessibility
 5. Argument graph D3 (4-6 hrs) — wow factor
-6. Human-vs-AI mode (8-10 hrs) — engagement
-7. Debate comparison (4-5 hrs) — decision robustness
+6. Human-in-the-council mode (8-10 hrs) — engagement
+7. Deliberation comparison (4-5 hrs) — decision robustness
 8. Slack integration (1-2 days) — adoption driver

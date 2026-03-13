@@ -49,8 +49,7 @@ class PersonaListResponse(BaseModel):
 class IdentityGenerateRequest(BaseModel):
     topic: str
     context: str | None = None
-    pro_count: int = Field(default=1, ge=1, le=4)
-    con_count: int = Field(default=1, ge=1, le=4)
+    council_size: int = Field(default=3, ge=2, le=6)
 
 
 class IdentityResponse(BaseModel):
@@ -61,9 +60,8 @@ class IdentityResponse(BaseModel):
     background: str
 
 
-class IdentityGenerateResponse(BaseModel):
-    pro: list[IdentityResponse]
-    con: list[IdentityResponse]
+class CouncilGenerateResponse(BaseModel):
+    council: list[IdentityResponse]
 
 
 # --- Agent argument schemas ---
@@ -71,13 +69,14 @@ class IdentityGenerateResponse(BaseModel):
 class ArgumentData(BaseModel):
     id: str
     type: str
+    stance: str = Field(description="supportive | critical | mixed | neutral")
+    confidence: float = Field(default=5.0, ge=0, le=10)
     targets: list[str] = Field(default_factory=list)
     claim: str
     grounds: str
     warrant: str
     backing: str
     qualifier: str
-    confidence: int = Field(default=5, ge=0, le=10)
 
 
 class AgentResponse(BaseModel):
@@ -85,41 +84,9 @@ class AgentResponse(BaseModel):
     summary: str
 
 
-# --- Synthesis schemas ---
+# --- Council member schemas ---
 
-class SynthesisArgument(BaseModel):
-    argument: str
-    strength: str
-    supporting_evidence: str
-    agent_confidence: int | float
-    caveats: str
-
-
-class UnresolvedTension(BaseModel):
-    tension: str
-    why_unresolved: str
-    what_would_resolve_it: str
-
-
-class Synthesis(BaseModel):
-    bottom_line: str
-    confidence_level: str
-    arguments_for: list[SynthesisArgument] = Field(default_factory=list)
-    arguments_against: list[SynthesisArgument] = Field(default_factory=list)
-    areas_of_agreement: list[str] = Field(default_factory=list)
-    unresolved_tensions: list[UnresolvedTension] = Field(default_factory=list)
-    key_insights: list[str] = Field(default_factory=list)
-    evidence_gaps: list[str] = Field(default_factory=list)
-    nuanced_conclusion: str
-
-
-class SynthesisResponse(BaseModel):
-    synthesis: Synthesis
-
-
-# --- Debate schemas ---
-
-class AgentInput(BaseModel):
+class CouncilMemberInput(BaseModel):
     persona_id: uuid.UUID | None = None
     title: str | None = None
     expertise: str | None = None
@@ -128,40 +95,92 @@ class AgentInput(BaseModel):
     background: str | None = None
 
 
-class AgentsInput(BaseModel):
-    pro: list[AgentInput]
-    con: list[AgentInput]
-
-
-class CreateDebateRequest(BaseModel):
-    topic: str
-    context: str | None = None
-    format_name: str | None = "oxford"
-    format_config: dict | None = None
-    panel_config: dict | None = None
-    agents: AgentsInput
-
-
-class DebateAgentResponse(BaseModel):
+class CouncilMemberResponse(BaseModel):
     id: uuid.UUID
-    side: str
-    position: int
+    seat_number: int
+    argument_prefix: str
     title: str
     expertise: str
     priorities: str
     style: str
     background: str | None
-    argument_prefix: str
 
     model_config = {"from_attributes": True}
+
+
+# --- Position schemas ---
+
+class AgentPositionResponse(BaseModel):
+    agent_prefix: str
+    agent_title: str
+    overall_stance: str
+    confidence: float
+    position_summary: str
+    key_concerns: list[dict] | None = None
+    key_supports: list[dict] | None = None
+    would_change_mind: str | None = None
+
+
+# --- Synthesis schemas ---
+
+class ThemePerspective(BaseModel):
+    agent_title: str
+    agent_prefix: str
+    stance: str
+    view: str
+    confidence: float
+
+
+class Theme(BaseModel):
+    theme: str
+    summary: str
+    perspectives: list[ThemePerspective]
+    consensus_level: str
+    key_tension: str | None = None
+
+
+class DisagreementCamp(BaseModel):
+    agents: list[str]
+    position: str
+
+
+class MajorDisagreement(BaseModel):
+    topic: str
+    camps: list[DisagreementCamp]
+    why_unresolvable: str
+
+
+class SynthesisResponse(BaseModel):
+    bottom_line: str
+    confidence_level: str
+    themes: list[Theme] = Field(default_factory=list)
+    council_consensus: list[str] = Field(default_factory=list)
+    major_disagreements: list[MajorDisagreement] = Field(default_factory=list)
+    individual_positions: list[AgentPositionResponse] = Field(default_factory=list)
+    blind_spots: list[str] = Field(default_factory=list)
+    key_insights: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    nuanced_conclusion: str = ""
+
+
+# --- Deliberation schemas ---
+
+class CreateDeliberationRequest(BaseModel):
+    topic: str
+    context: str | None = None
+    format_name: str | None = "standard"
+    format_config: dict | None = None
+    council_size: int = Field(default=3, ge=2, le=6)
+    agents: list[CouncilMemberInput] = Field(default_factory=list)
 
 
 class ArgumentResponse(BaseModel):
     id: uuid.UUID
     agent_id: uuid.UUID
-    agent_side: str
     argument_index: str
     arg_type: str
+    stance: str
+    confidence: float | None
     targets: list | dict | None
     claim: str | None
     grounds: str | None
@@ -186,20 +205,20 @@ class RoundResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class DebateResponse(BaseModel):
+class DeliberationResponse(BaseModel):
     id: uuid.UUID
     topic: str
     context: str | None
     status: str
     format_config: dict | None
-    panel_config: dict | None
+    council_size: int
     created_at: datetime
     completed_at: datetime | None
-    verdict: dict | None
+    synthesis: dict | None
 
     model_config = {"from_attributes": True}
 
 
-class DebateDetailResponse(DebateResponse):
+class DeliberationDetailResponse(DeliberationResponse):
+    council_members: list[CouncilMemberResponse] = Field(default_factory=list)
     rounds: list[RoundResponse] = Field(default_factory=list)
-    agents: list[DebateAgentResponse] = Field(default_factory=list)

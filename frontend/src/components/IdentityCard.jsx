@@ -2,6 +2,15 @@ import { useState } from 'react';
 import { Save, Pencil, Check, X } from 'lucide-react';
 import api from '../api';
 
+const SEAT_COLORS = [
+  { border: 'border-blue-500/20', text: 'text-blue-400' },
+  { border: 'border-amber-500/20', text: 'text-amber-400' },
+  { border: 'border-emerald-500/20', text: 'text-emerald-400' },
+  { border: 'border-violet-500/20', text: 'text-violet-400' },
+  { border: 'border-rose-500/20', text: 'text-rose-400' },
+  { border: 'border-cyan-500/20', text: 'text-cyan-400' },
+];
+
 const fields = [
   { key: 'title', label: 'Title', required: true },
   { key: 'expertise', label: 'Expertise' },
@@ -10,11 +19,13 @@ const fields = [
   { key: 'background', label: 'Background' },
 ];
 
-export default function IdentityCard({ identity, onChange, side }) {
+export default function IdentityCard({ identity, onChange, seatIndex = 0 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const color = SEAT_COLORS[seatIndex] || SEAT_COLORS[0];
 
   function startEdit() {
     setDraft({ ...identity });
@@ -54,9 +65,9 @@ export default function IdentityCard({ identity, onChange, side }) {
   const data = editing ? draft : identity;
 
   return (
-    <div className={`rounded-lg border bg-white/[0.02] p-3 ${side === 'pro' ? 'border-blue-500/20' : 'border-amber-500/20'}`}>
+    <div className={`rounded-lg border bg-white/[0.02] p-3 ${color.border}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className={`text-sm font-semibold truncate ${side === 'pro' ? 'text-blue-400' : 'text-amber-400'}`}>
+        <h4 className={`text-sm font-semibold truncate ${color.text}`}>
           {data.title || 'Untitled'}
         </h4>
         <div className="flex gap-1 shrink-0">

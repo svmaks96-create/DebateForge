@@ -2,17 +2,16 @@ from fastapi import APIRouter, Depends
 
 from auth import require_auth
 from identity_generator import generate_identities
-from schemas import IdentityGenerateRequest, IdentityGenerateResponse
+from schemas import CouncilGenerateResponse, IdentityGenerateRequest
 
 router = APIRouter(prefix="/api/identities", tags=["identities"], dependencies=[Depends(require_auth)])
 
 
-@router.post("/generate", response_model=IdentityGenerateResponse)
+@router.post("/generate", response_model=CouncilGenerateResponse)
 async def generate(body: IdentityGenerateRequest):
     result = await generate_identities(
         topic=body.topic,
         context=body.context,
-        pro_count=body.pro_count,
-        con_count=body.con_count,
+        council_size=body.council_size,
     )
     return result

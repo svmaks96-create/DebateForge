@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger = logging.getLogger("uvicorn.error")
-    logger.info("Database tables created")
+    logger.info("Database tables verified")
 
     async with async_session() as session:
         await seed_template_personas(session)

@@ -24,17 +24,17 @@ class Debate(Base):
     topic: Mapped[str] = mapped_column(Text, nullable=False)
     context: Mapped[str | None] = mapped_column(Text, nullable=True)
     format_config: Mapped[dict] = mapped_column(JSONB, nullable=True)
-    panel_config: Mapped[dict] = mapped_column(JSONB, server_default='{"pro_count": 1, "con_count": 1}')
+    council_size: Mapped[int] = mapped_column(Integer, default=3)
     status: Mapped[str] = mapped_column(VARCHAR(20), default="configuring")
     created_by_ip: Mapped[str | None] = mapped_column(VARCHAR(45), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    verdict: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    synthesis: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     rounds = relationship("Round", back_populates="debate", cascade="all, delete-orphan")
     agents = relationship("DebateAgent", back_populates="debate", cascade="all, delete-orphan")
     arguments = relationship("Argument", back_populates="debate", cascade="all, delete-orphan")
-    analyses = relationship("ArgumentAnalysis", back_populates="debate", cascade="all, delete-orphan")
+    positions = relationship("AgentPosition", back_populates="debate", cascade="all, delete-orphan")
 
 
 class Round(Base):
@@ -57,8 +57,7 @@ class DebateAgent(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     debate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("debates.id"), nullable=False)
-    side: Mapped[str] = mapped_column(VARCHAR(10), nullable=False)
-    position: Mapped[int] = mapped_column(Integer, default=0)
+    seat_number: Mapped[int] = mapped_column(Integer, nullable=False)
     persona_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("personas.id"), nullable=True)
     title: Mapped[str] = mapped_column(VARCHAR(200), nullable=False)
     expertise: Mapped[str] = mapped_column(Text, nullable=False)
@@ -70,6 +69,7 @@ class DebateAgent(Base):
     debate = relationship("Debate", back_populates="agents")
     persona = relationship("Persona", back_populates="debate_agents")
     arguments = relationship("Argument", back_populates="agent", cascade="all, delete-orphan")
+    positions = relationship("AgentPosition", back_populates="agent", cascade="all, delete-orphan")
 
 
 class Argument(Base):
@@ -79,9 +79,10 @@ class Argument(Base):
     round_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("rounds.id"), nullable=False)
     debate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("debates.id"), nullable=False)
     agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("debate_agents.id"), nullable=False)
-    agent_side: Mapped[str] = mapped_column(VARCHAR(10), nullable=False)
     argument_index: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
     arg_type: Mapped[str] = mapped_column(VARCHAR(30), nullable=False)
+    stance: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
+    confidence: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
     targets: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     claim: Mapped[str | None] = mapped_column(Text, nullable=True)
     grounds: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -97,22 +98,22 @@ class Argument(Base):
     agent = relationship("DebateAgent", back_populates="arguments")
 
 
-class ArgumentAnalysis(Base):
-    __tablename__ = "argument_analysis"
+class AgentPosition(Base):
+    __tablename__ = "agent_positions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     debate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("debates.id"), nullable=False)
-    argument_index: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
-    claim_score: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
-    grounds_score: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
-    warrant_score: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
-    backing_score: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
-    qualifier_score: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
-    overall_strength: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
-    fallacies: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("debate_agents.id"), nullable=False)
+    overall_stance: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
+    confidence: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
+    position_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    key_concerns: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    key_supports: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    would_change_mind: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    debate = relationship("Debate", back_populates="analyses")
+    debate = relationship("Debate", back_populates="positions")
+    agent = relationship("DebateAgent", back_populates="positions")
 
 
 class Persona(Base):

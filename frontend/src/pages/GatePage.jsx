@@ -37,7 +37,7 @@ export default function GatePage({ onAuth }) {
           DebateForge
         </h1>
         <p className="mt-2 text-sm text-gray-500 text-center">
-          AI-Powered Structured Debate Platform
+          AI Council Deliberation Platform
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">

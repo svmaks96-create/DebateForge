@@ -102,7 +102,7 @@ async def personas_from_debate(debate_id: uuid.UUID, db: AsyncSession = Depends(
             priorities=agent.priorities,
             style=agent.style,
             background=agent.background,
-            tags=[agent.side],
+            tags=[],
         )
         db.add(persona)
         created.append(persona)

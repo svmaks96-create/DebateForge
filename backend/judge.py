@@ -9,7 +9,7 @@ import anthropic
 
 from config import settings
 from events import publish_event
-from models import Argument, ArgumentAnalysis, Debate, DebateAgent as DebateAgentModel
+from models import AgentPosition, Argument, Debate, DebateAgent, Round
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,15 +21,16 @@ MAX_TOKENS = 4096
 
 FALLBACK_SYNTHESIS = {
     "synthesis": {
-        "bottom_line": "Synthesis could not be completed. Review the arguments manually.",
+        "bottom_line": "Synthesis could not be parsed. Review the deliberation transcript.",
         "confidence_level": "uncertain",
-        "arguments_for": [],
-        "arguments_against": [],
-        "areas_of_agreement": [],
-        "unresolved_tensions": [],
+        "themes": [],
+        "council_consensus": [],
+        "major_disagreements": [],
+        "individual_positions": [],
+        "blind_spots": [],
         "key_insights": [],
-        "evidence_gaps": [],
-        "nuanced_conclusion": "The synthesizer could not produce a valid analysis. Please review the raw transcript.",
+        "open_questions": [],
+        "nuanced_conclusion": "Please re-run the synthesis.",
     }
 }
 
@@ -37,85 +38,82 @@ FALLBACK_SYNTHESIS = {
 def _build_synthesizer_system_prompt(
     topic: str,
     context: str | None,
-    agents: list[DebateAgentModel],
+    agents: list[DebateAgent],
 ) -> str:
-    pro_agents = [a for a in agents if a.side == "pro"]
-    con_agents = [a for a in agents if a.side == "con"]
-
-    def agent_block(a: DebateAgentModel) -> str:
-        return (
-            f"  - Prefix: {a.argument_prefix}, Title: {a.title}\n"
-            f"    Expertise: {a.expertise}\n"
-            f"    Priorities: {a.priorities}"
-        )
-
-    pro_list = "\n".join(agent_block(a) for a in pro_agents)
-    con_list = "\n".join(agent_block(a) for a in con_agents)
+    agent_list = "\n".join(
+        f"  - Seat {a.seat_number + 1} ({a.argument_prefix}): {a.title}\n"
+        f"    Expertise: {a.expertise}\n"
+        f"    Priorities: {a.priorities}"
+        for a in agents
+    )
 
     prompt = f"""\
-You are a synthesis analyst. You have just observed a dialectical exploration where multiple \
-analysts examined a proposition from different angles. Your job is NOT to pick a winner — \
-it is to synthesize the collective insight into actionable understanding.
+You are an expert analyst synthesizing a council deliberation. Your job is to organize the \
+collective insight by THEME, not by agent. Do NOT pick a winner or side. Identify the key \
+themes that emerged and show how each council member weighed in on each theme.
 
-Proposition: {topic}
+Topic: {topic}
 {"Context: " + context if context else ""}
 
-FOR analysts:
-{pro_list}
-
-AGAINST analysts:
-{con_list}
+Council members:
+{agent_list}
 
 SYNTHESIS PRINCIPLES:
-1. Do NOT pick a winner or declare one side superior.
-2. Rank arguments by genuine evidential strength, not rhetorical skill.
-3. Highlight where analysts AGREED — these convergence points are likely the most reliable conclusions.
-4. Be honest about what is genuinely uncertain or unresolvable with available evidence.
-5. Note the self-assessed confidence levels from the analysts themselves.
-6. Produce actionable insight, not just academic analysis.
-7. When analysts conceded points, treat those concessions as high-signal data.
+1. Organize by THEME (3-6 key themes), not by agent.
+2. For each theme: summarize, list each council member's perspective (with stance + confidence), rate consensus level, note key tension if low consensus.
+3. Highlight where the council AGREED — convergence points are high-signal.
+4. When agents conceded points or changed their thinking, treat those as high-signal data.
+5. Be honest about what is genuinely uncertain or unresolvable.
+6. Extract non-obvious insights from cross-pollination of different expertise areas.
+7. Do NOT pick a winner or declare one position superior.
+8. Produce actionable insight, not just academic analysis.
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
 Output format:
 {{
   "synthesis": {{
-    "bottom_line": "A 2-3 sentence executive summary of what the exploration revealed. Not who won, but what the collective analysis suggests.",
+    "bottom_line": "2-3 sentence executive summary of what the deliberation revealed. Not who won, but what the collective analysis suggests.",
     "confidence_level": "high|moderate|low|uncertain",
-    "arguments_for": [
+    "themes": [
       {{
-        "argument": "The core claim",
-        "strength": "strong|moderate|weak",
-        "supporting_evidence": "Key evidence cited by analysts",
-        "agent_confidence": 8,
-        "caveats": "Important limitations or conditions"
+        "theme": "Theme name (e.g., Valuation Risk)",
+        "summary": "What the council thinks about this theme",
+        "perspectives": [
+          {{"agent_title": "...", "agent_prefix": "A", "stance": "supportive|critical|mixed|neutral", "view": "This agent's perspective on this theme", "confidence": 8}}
+        ],
+        "consensus_level": "high|medium|low",
+        "key_tension": "What is debated on this theme (null if high consensus)"
       }}
     ],
-    "arguments_against": [
+    "council_consensus": [
+      "Points where all or most council members agreed"
+    ],
+    "major_disagreements": [
       {{
-        "argument": "The core counter-claim",
-        "strength": "strong|moderate|weak",
-        "supporting_evidence": "Key evidence cited",
-        "agent_confidence": 7,
-        "caveats": "Limitations"
+        "topic": "What they disagree about",
+        "camps": [
+          {{"agents": ["A", "C"], "position": "Their shared position"}},
+          {{"agents": ["B"], "position": "The opposing position"}}
+        ],
+        "why_unresolvable": "Why this couldn't be resolved in the deliberation"
       }}
     ],
-    "areas_of_agreement": [
-      "Points where both sides converged or one side conceded"
-    ],
-    "unresolved_tensions": [
+    "individual_positions": [
       {{
-        "tension": "Description of what remains genuinely debatable",
-        "why_unresolved": "Why the analysts couldn't resolve this",
-        "what_would_resolve_it": "What evidence or data would settle this"
+        "agent_prefix": "A",
+        "agent_title": "...",
+        "overall_stance": "supportive|critical|mixed|uncertain",
+        "confidence": 7,
+        "position_summary": "...",
+        "key_concerns": [...],
+        "key_supports": [...],
+        "would_change_mind": "..."
       }}
     ],
-    "key_insights": [
-      "Non-obvious insights that emerged from the exploration"
-    ],
-    "evidence_gaps": [
-      "Important questions that couldn't be answered without more data"
-    ],
-    "nuanced_conclusion": "A 2-3 paragraph balanced conclusion that a decision-maker could actually use. Not 'X wins' but 'Here is what the evidence suggests, here is where it is uncertain, and here is what to consider.'"
+    "blind_spots": ["Important dimensions not adequately addressed by the council"],
+    "key_insights": ["Non-obvious insights that emerged from cross-pollination of perspectives"],
+    "open_questions": ["Unanswered questions from the deliberation"],
+    "nuanced_conclusion": "3-4 paragraph balanced conclusion organized by themes. What the evidence suggests, where it is uncertain, and what a decision-maker should consider."
   }}
 }}"""
 
@@ -124,12 +122,13 @@ Output format:
 
 def _build_synthesizer_user_message(
     arguments: list[Argument],
-    agents: list[DebateAgentModel],
+    agents: list[DebateAgent],
     rounds_info: list[dict],
+    positions: list[AgentPosition],
 ) -> str:
     agent_map = {a.id: a for a in agents}
 
-    msg = "=== FULL EXPLORATION TRANSCRIPT ===\n"
+    msg = "=== FULL DELIBERATION TRANSCRIPT ===\n"
 
     # Group arguments by round
     args_by_round: dict[int, list[Argument]] = {}
@@ -150,10 +149,12 @@ def _build_synthesizer_user_message(
         for arg in round_args:
             agent = agent_map.get(arg.agent_id)
             agent_title = agent.title if agent else "Unknown"
-            side = arg.agent_side.upper()
+            agent_prefix = agent.argument_prefix if agent else "?"
 
-            msg += f"\n[{side} — {agent_title} ({arg.argument_index})]"
+            msg += f"\n[{agent_prefix} — {agent_title} ({arg.argument_index})]"
             msg += f"\n  Type: {arg.arg_type}"
+            msg += f"\n  Stance: {arg.stance}"
+            msg += f"\n  Confidence: {arg.confidence}/10" if arg.confidence else ""
             if arg.targets:
                 msg += f"\n  Targets: {json.dumps(arg.targets)}"
             msg += f"\n  Claim: {arg.claim or '(none)'}"
@@ -161,18 +162,34 @@ def _build_synthesizer_user_message(
             msg += f"\n  Warrant: {arg.warrant or '(none)'}"
             msg += f"\n  Backing: {arg.backing or '(none)'}"
             msg += f"\n  Qualifier: {arg.qualifier or '(none)'}"
-            # Include agent self-assessed confidence if available
-            if arg.raw_response:
-                for raw_arg in arg.raw_response.get("arguments", []):
-                    if raw_arg.get("id") == arg.argument_index and "confidence" in raw_arg:
-                        msg += f"\n  Agent Confidence: {raw_arg['confidence']}/10"
-                        break
             if arg.summary:
                 msg += f"\n  Summary: {arg.summary}"
             msg += "\n"
 
     msg += "\n=== END TRANSCRIPT ===\n"
-    msg += "\nSynthesize this exploration now. Respond with JSON only."
+
+    # Append final position statements
+    if positions:
+        msg += "\n=== FINAL POSITION STATEMENTS ===\n"
+        for pos in positions:
+            agent = agent_map.get(pos.agent_id)
+            agent_title = agent.title if agent else "Unknown"
+            agent_prefix = agent.argument_prefix if agent else "?"
+
+            msg += f"\n[{agent_prefix} — {agent_title}]"
+            msg += f"\n  Overall Stance: {pos.overall_stance}"
+            msg += f"\n  Confidence: {pos.confidence}/10" if pos.confidence else ""
+            msg += f"\n  Position: {pos.position_summary}"
+            if pos.key_concerns:
+                msg += f"\n  Key Concerns: {json.dumps(pos.key_concerns)}"
+            if pos.key_supports:
+                msg += f"\n  Key Supports: {json.dumps(pos.key_supports)}"
+            if pos.would_change_mind:
+                msg += f"\n  Would Change Mind If: {pos.would_change_mind}"
+            msg += "\n"
+        msg += "\n=== END POSITIONS ===\n"
+
+    msg += "\nSynthesize this deliberation now. Organize by THEME, not by agent. Respond with JSON only."
     return msg
 
 
@@ -209,26 +226,25 @@ def _parse_synthesis_response(raw_text: str) -> dict | None:
     return None
 
 
-async def synthesize_debate(
+async def synthesize_deliberation(
     debate_id: uuid.UUID,
     db: AsyncSession,
 ) -> None:
-    """Synthesize a completed dialectical exploration and save the synthesis."""
+    """Synthesize a completed council deliberation with theme-based analysis."""
     # Load debate
     debate = await db.get(Debate, debate_id)
     if not debate:
         raise ValueError(f"Debate {debate_id} not found")
 
-    # Load agents
+    # Load agents ordered by seat_number
     agents_result = await db.execute(
-        select(DebateAgentModel)
-        .where(DebateAgentModel.debate_id == debate_id)
-        .order_by(DebateAgentModel.position)
+        select(DebateAgent)
+        .where(DebateAgent.debate_id == debate_id)
+        .order_by(DebateAgent.seat_number)
     )
     agents = agents_result.scalars().all()
 
-    # Load all arguments with round info
-    from models import Round
+    # Load all arguments
     args_result = await db.execute(
         select(Argument)
         .where(Argument.debate_id == debate_id)
@@ -236,6 +252,7 @@ async def synthesize_debate(
     )
     arguments = args_result.scalars().all()
 
+    # Load rounds
     rounds_result = await db.execute(
         select(Round)
         .where(Round.debate_id == debate_id)
@@ -247,24 +264,31 @@ async def synthesize_debate(
         for r in rounds
     ]
 
+    # Load final positions
+    positions_result = await db.execute(
+        select(AgentPosition)
+        .where(AgentPosition.debate_id == debate_id)
+        .order_by(AgentPosition.created_at)
+    )
+    positions = positions_result.scalars().all()
+
     if not arguments:
         logger.warning("No arguments found for debate %s, using fallback synthesis", debate_id)
-        debate.verdict = FALLBACK_SYNTHESIS
+        debate.synthesis = FALLBACK_SYNTHESIS
         debate.status = "completed"
         debate.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await publish_event(str(debate_id), "debate_complete", {
-            "debate_id": str(debate_id),
-            "synthesis_preview": FALLBACK_SYNTHESIS["synthesis"]["bottom_line"],
+            "bottom_line": FALLBACK_SYNTHESIS["synthesis"]["bottom_line"],
             "confidence_level": FALLBACK_SYNTHESIS["synthesis"]["confidence_level"],
         })
         return
 
     # Build prompts
     system_prompt = _build_synthesizer_system_prompt(debate.topic, debate.context, agents)
-    user_message = _build_synthesizer_user_message(arguments, agents, rounds_info)
+    user_message = _build_synthesizer_user_message(arguments, agents, rounds_info, positions)
 
-    # Call Claude
+    # Call Claude with retry
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
     synthesis_data = None
 
@@ -291,32 +315,18 @@ async def synthesize_debate(
         logger.error("Synthesizer could not produce valid output for debate %s, using fallback", debate_id)
         synthesis_data = FALLBACK_SYNTHESIS
 
-    # Save synthesis to debate (stored in verdict column for backward compatibility)
-    debate.verdict = synthesis_data
+    # Save synthesis to debate
+    debate.synthesis = synthesis_data
     debate.status = "completed"
     debate.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
-    # Publish completion SSE with synthesis preview
+    # Publish completion SSE
     synthesis = synthesis_data.get("synthesis", {})
     await publish_event(str(debate_id), "debate_complete", {
-        "debate_id": str(debate_id),
-        "synthesis_preview": synthesis.get("bottom_line", ""),
+        "bottom_line": synthesis.get("bottom_line", ""),
         "confidence_level": synthesis.get("confidence_level", "uncertain"),
     })
 
     logger.info("Synthesis completed for debate %s: confidence=%s",
                 debate_id, synthesis.get("confidence_level"))
-
-
-# Backward compatibility alias
-judge_debate = synthesize_debate
-
-
-def _to_decimal(val) -> Decimal | None:
-    if val is None:
-        return None
-    try:
-        return Decimal(str(val))
-    except Exception:
-        return None

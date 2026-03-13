@@ -1,17 +1,19 @@
 # DebateForge
 
-An AI-powered dialectical exploration platform where Claude agents explore both sides of a topic as truth-seekers through configurable formats, then a synthesizer produces balanced insight including areas of agreement, unresolved tensions, and actionable recommendations.
+An AI council deliberation platform where 2-6 independent expert agents discuss a topic, then a synthesizer produces theme-based analysis showing where the council agreed, disagreed, and what insights emerged.
 
 ## Features
 
-- **AI-vs-AI dialectical exploration** — Agents argue honestly, concede when evidence is stronger, and rate their own confidence
-- **Configurable formats** — Opening, rebuttal, cross-examination, and closing rounds with adjustable word limits
-- **Panel support** — 1v1 up to 4v4 debates with distinct agent identities per side
-- **Toulmin-structured arguments** — Each argument includes claim, grounds, warrant, backing, qualifier, and self-assessed confidence
-- **Identity generation** — Auto-generate contextually relevant agent identities with Claude
-- **Persona library** — Save, browse, and reuse agent personas across debates (8 seed templates included)
-- **Real-time streaming** — Watch debates unfold live via Server-Sent Events
-- **Synthesis report** — Bottom line assessment, key arguments for and against, areas of agreement, unresolved tensions, key insights, and evidence gaps
+- **AI Council Deliberation** — 2-6 independent expert agents discuss a topic as a council, with positions emerging naturally from each agent's role and expertise
+- **No Assigned Sides** — Agents are NOT pro/con; each agent can be supportive, critical, mixed, or neutral on any point
+- **Stance & Confidence Scoring** — Per-argument stance labels (supportive/critical/mixed/neutral) and self-assessed confidence (0-10)
+- **Toulmin-Structured Arguments** — Each argument includes claim, grounds, warrant, backing, qualifier, and summary
+- **Individual Position Statements** — After discussion rounds, each agent states their final position with concerns, supports, and what would change their mind
+- **Theme-Based Synthesis** — Synthesizer organizes findings by theme: perspectives from each agent, consensus levels, key tensions, blind spots, and insights
+- **Deliberation Formats** — Quick Take (1 round), Rapid Assessment (2), Standard (3), Deep Dive (5)
+- **Identity Generation** — Auto-generate contextually relevant council members with Claude
+- **Persona Library** — Save, browse, and reuse agent personas across deliberations (8 seed templates included)
+- **Real-Time Streaming** — Watch deliberations unfold live via Server-Sent Events
 
 ## Prerequisites
 
@@ -168,15 +170,15 @@ debateforge/
 │   ├── database.py             # SQLAlchemy async engine
 │   ├── models.py               # ORM models (6 tables)
 │   ├── schemas.py              # Pydantic request/response models
-│   ├── debate_engine.py        # Orchestrator: rounds + turns
-│   ├── agent.py                # Claude debating agent
-│   ├── judge.py                # Claude synthesizer (balanced insight, not winner-picking)
-│   ├── identity_generator.py   # Claude-powered identity generation
+│   ├── debate_engine.py        # Council orchestrator: rounds + positions
+│   ├── agent.py                # Claude council member agent
+│   ├── judge.py                # Claude synthesizer (theme-based analysis)
+│   ├── identity_generator.py   # Claude-powered council generation
 │   ├── events.py               # Redis pub/sub for SSE
 │   ├── seed_personas.py        # 8 seed persona templates
 │   └── routes/
 │       ├── auth.py             # POST /api/auth/verify
-│       ├── debates.py          # Debate CRUD + start + stream
+│       ├── debates.py          # Deliberation CRUD + start + stream
 │       ├── formats.py          # GET /api/formats
 │       ├── identities.py       # POST /api/identities/generate
 │       └── personas.py         # Persona CRUD
@@ -186,7 +188,8 @@ debateforge/
         ├── App.jsx             # Router + layout
         ├── api.js              # Axios instance with auth
         ├── pages/              # Gate, Home, Debate, History, Personas
-        ├── components/         # LiveViewer, ArgumentCard, AnalysisDashboard, etc.
+        ├── components/         # CouncilSetup, LiveViewer, ArgumentCard,
+        │                       # AnalysisDashboard, ThemeCard, PositionCard, etc.
         └── hooks/
             └── useDebateStream.js
 ```

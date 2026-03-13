@@ -5,6 +5,9 @@ DebateForge is a web tool where 2-6 AI agents (a "council") deliberate on a topi
 
 Example: Topic "Is NVIDIA a good investment?" → Council of 4 (Equity Analyst, Risk Strategist, AI CTO, Portfolio Manager) → 3 rounds of discussion → Each states final position → Synthesizer organizes findings by theme (Valuation Risk, Technology Moat, Competitive Dynamics) showing how each expert weighed in.
 
+## Important: No Backward Compatibility
+This is a clean break from v1/v2. Old debate data has been deleted. All tables are rebuilt from scratch for the council model. No code should handle legacy pro/con format, verdict format, or side-based data. If you see old patterns in existing code, replace them — don't add compatibility layers.
+
 ## Tech Stack
 - **Backend**: FastAPI (Python 3.13) in Docker
 - **Frontend**: React 18 + Tailwind CSS (Vite), served by Nginx as static files
@@ -273,21 +276,21 @@ Each seat gets a distinct color (used in UI for badges, borders, charts):
 - Access at http://<VPS_IP>:8080/
 
 ## Council Pivot Build Steps
-- [ ] Step 1: Update models.py — new schema (drop old tables, create fresh)
-- [ ] Step 2: Update schemas.py — new request/response models
-- [ ] Step 3: Update identity_generator.py — council generation (not pro/con)
-- [ ] Step 4: Update agent.py — council member prompt (no sides, stance labels)
-- [ ] Step 5: Update debate_engine.py — council orchestration + position phase
-- [ ] Step 6: Update judge.py — theme-based synthesizer
-- [ ] Step 7: Update routes (debates, formats, identities) — new API shape
-- [ ] Step 8: Update frontend HomePage — CouncilSetup component
-- [ ] Step 9: Update frontend LiveViewer — conversation thread layout
-- [ ] Step 10: Update frontend AnalysisDashboard — themes + positions tabs
-- [ ] Step 11: Update frontend DebatePage — wire new SSE events + review mode
-- [ ] Step 12: Update HistoryPage — remove verdict/winner display
-- [ ] Step 13: Update CLAUDE.md, README, ROADMAP
-- [ ] Step 14: Build frontend + deploy to Nginx
-- [ ] Step 15: Test end-to-end + commit + merge to main
+- [x] Step 1: Update models.py — new schema (drop old tables, create fresh)
+- [x] Step 2: Update schemas.py — new request/response models
+- [x] Step 3: Update identity_generator.py — council generation (not pro/con)
+- [x] Step 4: Update agent.py — council member prompt (no sides, stance labels)
+- [x] Step 5: Update debate_engine.py — council orchestration + position phase
+- [x] Step 6: Update judge.py — theme-based synthesizer
+- [x] Step 7: Update routes (debates, formats, identities) — new API shape
+- [x] Step 8: Update frontend HomePage — CouncilSetup component
+- [x] Step 9: Update frontend LiveViewer — conversation thread layout
+- [x] Step 10: Update frontend AnalysisDashboard — themes + positions tabs
+- [x] Step 11: Update frontend DebatePage — wire new SSE events + review mode
+- [x] Step 12: Update HistoryPage — remove verdict/winner display
+- [x] Step 13: Update CLAUDE.md, README, ROADMAP
+- [x] Step 14: Build frontend + deploy to Nginx
+- [x] Step 15: Test end-to-end + commit + merge to main
 
 ## Future: Quality Upgrades (build in order)
 1. Evidence Mode — agents search web, cite real sources (6-8 hrs)
