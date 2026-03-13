@@ -336,9 +336,54 @@ Agents can search the web for real evidence using Tavily API during deliberation
 - [x] E7: Update frontend AnalysisDashboard (evidence quality)
 - [x] E8: Test end-to-end + deploy
 
+## Adversarial Verification (Current Build)
+After deliberation rounds but before synthesis, a Verification Agent independently fact-checks claims from both sides using web search.
+
+### How It Works
+- Runs after all rounds complete, before synthesis
+- A separate Claude call with web_search tool access
+- Reviews all factual claims, cross-references citations
+- Identifies: verified claims, disputed claims, shared blind spots, missing perspectives, logical gaps
+- Synthesizer receives verification report alongside transcript
+
+### New Status Flow
+configuring → running → reflecting → verifying → synthesizing → completed
+
+### Verification Output
+```json
+{
+  "verified_claims": [{"claim": "...", "source_argument": "A1", "verification_status": "verified|partially_true|disputed|unverifiable|false", "explanation": "...", "corrected_claim": "..."}],
+  "shared_blind_spots": [{"assumption": "...", "challenge": "...", "impact": "..."}],
+  "missing_perspectives": ["..."],
+  "logical_gaps": [{"argument_id": "B2", "gap": "...", "severity": "significant|minor"}],
+  "overall_reliability": "high|moderate|low",
+  "reliability_explanation": "..."
+}
+```
+
+### Backend Changes
+- New file: backend/verifier.py — verification agent with web search
+- Updated: backend/debate_engine.py — add verification phase between reflecting and synthesizing
+- Updated: backend/judge.py — synthesizer receives verification report
+- Updated: backend/models.py — verification_report JSONB on debates table
+- Updated: backend/events.py — new SSE events: verification_start, verification_complete
+
+### Frontend Changes
+- Updated: LiveViewer.jsx — "Verifying claims..." status between reflecting and synthesizing
+- Updated: ArgumentCard.jsx — verification badge (✓ Verified, ⚠️ Disputed, ? Unverifiable)
+- Updated: AnalysisDashboard.jsx — new Verification section showing fact-check results, blind spots
+
+### Adversarial Verification Build Steps
+- [ ] V1: Update models.py (verification_report JSONB on debates) + config
+- [ ] V2: Create backend/verifier.py (verification agent + web search)
+- [ ] V3: Update debate_engine.py (verification phase)
+- [ ] V4: Update judge.py (synthesizer receives verification report)
+- [ ] V5: Update frontend (verification status + badges + dashboard section)
+- [ ] V6: Test end-to-end + deploy
+
 ## Future: Quality Upgrades (build in order)
-1. Evidence Mode — agents search web, cite real sources (6-8 hrs)
-2. Adversarial Verification — fact-checker agent (4-5 hrs)
+1. ~~Evidence Mode — agents search web, cite real sources (6-8 hrs)~~ ✅
+2. ~~Adversarial Verification — fact-checker agent (4-5 hrs)~~ 🔨 In Progress
 3. Position Evolution Tracking — confidence timeline across rounds (4-5 hrs)
 4. Decision Framework Templates — domain-specific analysis (4-5 hrs)
 See QUALITY_UPGRADES_PLAN.md for details.
