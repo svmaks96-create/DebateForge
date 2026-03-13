@@ -83,6 +83,14 @@ export default function useDebateStream(debateId) {
       }]);
     });
 
+    es.addEventListener('verification_start', () => {
+      setStatus('verifying');
+    });
+
+    es.addEventListener('verification_complete', () => {
+      // Verification done, synthesis will start next
+    });
+
     es.addEventListener('synthesis_start', () => {
       setStatus('synthesizing');
     });

@@ -134,6 +134,12 @@ function StatusBar({ status, currentRound, totalRounds, formatName }) {
           Final Positions
         </span>
       )}
+      {status === 'verifying' && (
+        <span className="flex items-center gap-1.5 text-amber-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          Verifying…
+        </span>
+      )}
       {status === 'synthesizing' && (
         <span className="flex items-center gap-1.5 text-violet-400">
           <FileText size={12} />
@@ -252,6 +258,7 @@ export default function DebatePage() {
     : debate.format_config?.rounds?.length || 0;
   const formatName = debate.format_config?.format_name || '';
   const councilMembers = debate.council_members || [];
+  const verificationReport = debate.verification_report || null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
@@ -314,11 +321,12 @@ export default function DebatePage() {
           animate={isLive}
           status={effectiveStatus}
           rounds={displayRounds}
+          verificationReport={verificationReport}
         />
       )}
 
       {/* Position cards during reflecting phase */}
-      {(effectiveStatus === 'reflecting' || effectiveStatus === 'synthesizing' || effectiveStatus === 'completed') && displayPositions.length > 0 && (
+      {(effectiveStatus === 'reflecting' || effectiveStatus === 'verifying' || effectiveStatus === 'synthesizing' || effectiveStatus === 'completed') && displayPositions.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
             Final Positions
@@ -336,6 +344,7 @@ export default function DebatePage() {
             debateId={id}
             synthesis={displaySynthesis}
             councilMembers={councilMembers}
+            verificationReport={verificationReport}
           />
         </div>
       )}

@@ -140,6 +140,7 @@ async def get_debate(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         created_at=debate.created_at,
         completed_at=debate.completed_at,
         synthesis=debate.synthesis,
+        verification_report=debate.verification_report,
         council_members=debate.agents,
         rounds=rounds,
     )
@@ -196,6 +197,7 @@ async def get_analysis(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     return {
         "debate_id": str(debate_id),
         "synthesis": debate.synthesis,
+        "verification_report": debate.verification_report,
     }
 
 

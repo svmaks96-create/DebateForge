@@ -272,13 +272,20 @@ async def _run_deliberation_inner(debate_id: uuid.UUID, db: AsyncSession) -> Non
             "position_summary": position_data.get("position_summary", ""),
         })
 
+    # === VERIFICATION PHASE ===
+    debate.status = "verifying"
+    await db.commit()
+
+    from verifier import verify_deliberation
+    verification_report = await verify_deliberation(debate_id, db)
+
     # === SYNTHESIZING PHASE ===
     debate.status = "synthesizing"
     await db.commit()
     await publish_event(str(debate_id), "synthesis_start", {})
 
     from judge import synthesize_deliberation
-    await synthesize_deliberation(debate_id, db)
+    await synthesize_deliberation(debate_id, db, verification_report=verification_report)
 
     logger.info("Deliberation %s completed successfully", debate_id)
 

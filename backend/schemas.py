@@ -225,6 +225,7 @@ class DeliberationResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     synthesis: dict | None
+    verification_report: dict | None = None
 
     model_config = {"from_attributes": True}
 

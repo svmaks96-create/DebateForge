@@ -67,6 +67,7 @@ SYNTHESIS PRINCIPLES:
 6. Extract non-obvious insights from cross-pollination of different expertise areas.
 7. Do NOT pick a winner or declare one position superior.
 8. Produce actionable insight, not just academic analysis.
+9. If an independent verification report is provided, integrate its findings: highlight verified claims, flag disputed ones, and surface blind spots in your conclusion.
 
 EVIDENCE ASSESSMENT:
 In addition to theme analysis, evaluate the evidence quality:
@@ -129,7 +130,13 @@ Output format:
       "unsupported_claims": ["C3 claimed X without evidence"],
       "evidence_gaps": ["No data cited on actual enterprise AI ROI"]
     }},
-    "nuanced_conclusion": "3-4 paragraph balanced conclusion organized by themes. What the evidence suggests, where it is uncertain, and what a decision-maker should consider."
+    "verification_summary": {{
+      "overall_reliability": "high|moderate|low",
+      "verified_insights": ["Claims independently confirmed by fact-checker"],
+      "disputed_claims": ["Claims the fact-checker found problematic"],
+      "blind_spots_discovered": ["Important factors nobody considered"]
+    }},
+    "nuanced_conclusion": "3-4 paragraph balanced conclusion organized by themes. What the evidence suggests, where it is uncertain, and what a decision-maker should consider. Reference verification findings where relevant."
   }}
 }}"""
 
@@ -141,6 +148,7 @@ def _build_synthesizer_user_message(
     agents: list[DebateAgent],
     rounds_info: list[dict],
     positions: list[AgentPosition],
+    verification_report: dict | None = None,
 ) -> str:
     agent_map = {a.id: a for a in agents}
 
@@ -214,6 +222,44 @@ def _build_synthesizer_user_message(
             msg += "\n"
         msg += "\n=== END POSITIONS ===\n"
 
+    # Append verification report if available
+    if verification_report:
+        msg += "\n== INDEPENDENT VERIFICATION REPORT ==\n"
+        msg += "A fact-checker independently reviewed the council's claims. Consider this when synthesizing:\n\n"
+
+        verified = verification_report.get("verified_claims", [])
+        if verified:
+            msg += "Verified claims:\n"
+            for vc in verified:
+                status = vc.get("verification_status", "unknown")
+                msg += f"  - [{status}] {vc.get('claim', '')} (from {vc.get('source_argument', '?')})"
+                if vc.get("corrected_claim"):
+                    msg += f" → Corrected: {vc['corrected_claim']}"
+                msg += f"\n    {vc.get('explanation', '')}\n"
+
+        blind_spots = verification_report.get("shared_blind_spots", [])
+        if blind_spots:
+            msg += "\nShared blind spots:\n"
+            for bs in blind_spots:
+                msg += f"  - {bs.get('assumption', '')}: {bs.get('challenge', '')} (Impact: {bs.get('impact', '')})\n"
+
+        missing = verification_report.get("missing_perspectives", [])
+        if missing:
+            msg += "\nMissing perspectives:\n"
+            for mp in missing:
+                msg += f"  - {mp}\n"
+
+        gaps = verification_report.get("logical_gaps", [])
+        if gaps:
+            msg += "\nLogical gaps:\n"
+            for g in gaps:
+                msg += f"  - [{g.get('severity', 'minor')}] {g.get('argument_id', '?')}: {g.get('gap', '')}\n"
+
+        reliability = verification_report.get("overall_reliability", "unknown")
+        explanation = verification_report.get("reliability_explanation", "")
+        msg += f"\nOverall reliability: {reliability}\n{explanation}\n"
+        msg += "\n== END VERIFICATION REPORT ==\n"
+
     msg += "\nSynthesize this deliberation now. Organize by THEME, not by agent. Respond with JSON only."
     return msg
 
@@ -254,6 +300,8 @@ def _parse_synthesis_response(raw_text: str) -> dict | None:
 async def synthesize_deliberation(
     debate_id: uuid.UUID,
     db: AsyncSession,
+    *,
+    verification_report: dict | None = None,
 ) -> None:
     """Synthesize a completed council deliberation with theme-based analysis."""
     # Load debate
@@ -311,7 +359,7 @@ async def synthesize_deliberation(
 
     # Build prompts
     system_prompt = _build_synthesizer_system_prompt(debate.topic, debate.context, agents)
-    user_message = _build_synthesizer_user_message(arguments, agents, rounds_info, positions)
+    user_message = _build_synthesizer_user_message(arguments, agents, rounds_info, positions, verification_report)
 
     # Call Claude with retry
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)

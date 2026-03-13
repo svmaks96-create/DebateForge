@@ -374,11 +374,11 @@ configuring → running → reflecting → verifying → synthesizing → comple
 - Updated: AnalysisDashboard.jsx — new Verification section showing fact-check results, blind spots
 
 ### Adversarial Verification Build Steps
-- [ ] V1: Update models.py (verification_report JSONB on debates) + config
-- [ ] V2: Create backend/verifier.py (verification agent + web search)
-- [ ] V3: Update debate_engine.py (verification phase)
-- [ ] V4: Update judge.py (synthesizer receives verification report)
-- [ ] V5: Update frontend (verification status + badges + dashboard section)
+- [x] V1: Update models.py (verification_report JSONB on debates) + config
+- [x] V2: Create backend/verifier.py (verification agent + web search)
+- [x] V3: Update debate_engine.py (verification phase)
+- [x] V4: Update judge.py (synthesizer receives verification report)
+- [x] V5: Update frontend (verification status + badges + dashboard section)
 - [ ] V6: Test end-to-end + deploy
 
 ## Future: Quality Upgrades (build in order)

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { FileText, Users } from 'lucide-react';
+import { FileText, Users, ShieldCheck } from 'lucide-react';
 import ArgumentCard from './ArgumentCard';
 
 const roundTypeLabels = {
@@ -32,7 +32,7 @@ function PhaseDivider({ icon: Icon, text, color }) {
   );
 }
 
-export default function LiveViewer({ arguments: args, animate = true, status, rounds = [] }) {
+export default function LiveViewer({ arguments: args, animate = true, status, rounds = [], verificationReport = null }) {
   const endRef = useRef(null);
 
   // Auto-scroll to latest argument
@@ -70,13 +70,14 @@ export default function LiveViewer({ arguments: args, animate = true, status, ro
                 key={arg.id || arg.argument_index || `${group.roundNumber}-${i}`}
                 argument={arg}
                 animate={animate}
+                verificationReport={verificationReport}
               />
             ))}
           </div>
         </div>
       ))}
 
-      {args.length === 0 && status !== 'reflecting' && status !== 'synthesizing' && (
+      {args.length === 0 && status !== 'reflecting' && status !== 'verifying' && status !== 'synthesizing' && (
         <div className="text-sm text-gray-600 italic py-8 text-center">
           Waiting for council members to speak…
         </div>
@@ -88,6 +89,15 @@ export default function LiveViewer({ arguments: args, animate = true, status, ro
           icon={Users}
           text="Council members are stating their final positions…"
           color="border-blue-500/20 bg-blue-500/5 text-blue-300"
+        />
+      )}
+
+      {/* Verifying phase divider */}
+      {status === 'verifying' && (
+        <PhaseDivider
+          icon={ShieldCheck}
+          text="Verifying claims independently…"
+          color="border-amber-500/20 bg-amber-500/5 text-amber-300"
         />
       )}
 
