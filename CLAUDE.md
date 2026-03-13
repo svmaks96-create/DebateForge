@@ -13,7 +13,7 @@ This is a clean break from v1/v2. Old debate data has been deleted. All tables a
 - **Frontend**: React 18 + Tailwind CSS (Vite), served by Nginx as static files
 - **Database**: PostgreSQL 16 (Docker)
 - **Cache/PubSub**: Redis 7 (Docker)
-- **AI**: Claude API (claude-sonnet-4-20250514) via `anthropic` Python SDK
+- **AI**: Claude API (claude-sonnet-4-6) via `anthropic` Python SDK
 - **Auth**: Invite code → JWT HttpOnly cookie (7-day expiry, no user accounts)
 - **Reverse Proxy**: Nginx on host (port 8080), proxies /api/* → FastAPI :8000
 

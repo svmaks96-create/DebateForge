@@ -9,7 +9,7 @@ from search import web_search
 
 logger = logging.getLogger("uvicorn.error")
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 2000
 MAX_SEARCHES_PER_TURN = 3
 
