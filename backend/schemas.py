@@ -66,6 +66,14 @@ class CouncilGenerateResponse(BaseModel):
 
 # --- Agent argument schemas ---
 
+class CitationData(BaseModel):
+    url: str = ""
+    title: str = ""
+    snippet: str = ""
+    date: str | None = None
+    source_type: str = "web"
+
+
 class ArgumentData(BaseModel):
     id: str
     type: str
@@ -77,6 +85,7 @@ class ArgumentData(BaseModel):
     warrant: str
     backing: str
     qualifier: str
+    citations: list[CitationData] = Field(default_factory=list)
 
 
 class AgentResponse(BaseModel):
@@ -188,6 +197,7 @@ class ArgumentResponse(BaseModel):
     backing: str | None
     qualifier: str | None
     summary: str | None
+    citations: list[dict] = Field(default_factory=list)
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str
     INVITE_CODE: str = "debateforge-2026"
     JWT_SECRET: str
+    TAVILY_API_KEY: str = ""
 
     model_config = {"env_file": ".env"}
 

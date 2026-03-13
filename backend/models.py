@@ -90,6 +90,7 @@ class Argument(Base):
     backing: Mapped[str | None] = mapped_column(Text, nullable=True)
     qualifier: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    citations: Mapped[list | None] = mapped_column(JSONB, server_default="[]")
     raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

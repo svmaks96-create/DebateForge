@@ -327,14 +327,14 @@ Agents can search the web for real evidence using Tavily API during deliberation
 ```
 
 ### Evidence Mode Build Steps
-- [ ] E1: Add TAVILY_API_KEY to config.py + docker-compose.yml
-- [ ] E2: Create backend/search.py (Tavily wrapper + Redis cache)
-- [ ] E3: Update models.py (citations JSONB on arguments)
-- [ ] E4: Update agent.py (tool_use with web_search)
-- [ ] E5: Update judge.py (synthesizer evaluates citations)
-- [ ] E6: Update frontend ArgumentCard (citation display)
-- [ ] E7: Update frontend AnalysisDashboard (evidence quality)
-- [ ] E8: Test end-to-end + deploy
+- [x] E1: Add TAVILY_API_KEY to config.py + docker-compose.yml
+- [x] E2: Create backend/search.py (Tavily wrapper + Redis cache)
+- [x] E3: Update models.py (citations JSONB on arguments)
+- [x] E4: Update agent.py (tool_use with web_search)
+- [x] E5: Update judge.py (synthesizer evaluates citations)
+- [x] E6: Update frontend ArgumentCard (citation display)
+- [x] E7: Update frontend AnalysisDashboard (evidence quality)
+- [x] E8: Test end-to-end + deploy
 
 ## Future: Quality Upgrades (build in order)
 1. Evidence Mode — agents search web, cite real sources (6-8 hrs)

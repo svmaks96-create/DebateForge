@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, ArrowRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowRight, ExternalLink, Paperclip } from 'lucide-react';
 
 const SEAT_COLORS = {
   A: { border: 'border-l-[#3B82F6]', badge: 'bg-[#3B82F6]/20 text-[#3B82F6]' },
@@ -19,8 +19,17 @@ const STANCE_CONFIG = {
 
 const HIGHLIGHT_TYPES = new Set(['question', 'build_on']);
 
+const SOURCE_TYPE_STYLES = {
+  academic:   'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  government: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  news:       'bg-green-500/15 text-green-400 border-green-500/30',
+  company:    'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  web:        'bg-gray-500/15 text-gray-400 border-gray-500/30',
+};
+
 export default function ArgumentCard({ argument, animate = false }) {
   const [expanded, setExpanded] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   const prefix = argument.agentPrefix || argument.agent_prefix || '?';
   const seatColor = SEAT_COLORS[prefix] || SEAT_COLORS.A;
@@ -28,6 +37,7 @@ export default function ArgumentCard({ argument, animate = false }) {
   const argType = argument.arg_type || argument.type || 'claim';
   const targets = argument.targets || [];
   const confidence = argument.confidence ?? null;
+  const citations = argument.citations || [];
   const hasToulmin = argument.grounds || argument.warrant || argument.backing || argument.qualifier;
 
   return (
@@ -58,6 +68,15 @@ export default function ArgumentCard({ argument, animate = false }) {
           <span className="text-[10px] text-gray-500 font-mono">{confidence}/10</span>
         )}
 
+        {/* Citation count badge */}
+        {citations.length > 0 ? (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 inline-flex items-center gap-1">
+            <Paperclip size={9} /> {citations.length} source{citations.length !== 1 ? 's' : ''}
+          </span>
+        ) : (
+          <span className="text-[10px] text-gray-600">No sources</span>
+        )}
+
         {/* Highlight question / build_on types */}
         {HIGHLIGHT_TYPES.has(argType) && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/30">
@@ -85,6 +104,52 @@ export default function ArgumentCard({ argument, animate = false }) {
       {/* Summary */}
       {argument.summary && (
         <p className="mt-2 text-xs text-gray-500 italic">{argument.summary}</p>
+      )}
+
+      {/* Collapsible Sources */}
+      {citations.length > 0 && (
+        <div className="mt-3 border-t border-white/5 pt-2">
+          <button
+            onClick={() => setSourcesOpen(!sourcesOpen)}
+            className="flex items-center gap-1 text-xs text-cyan-500 hover:text-cyan-300 transition-colors cursor-pointer"
+          >
+            {sourcesOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            Sources ({citations.length})
+          </button>
+          {sourcesOpen && (
+            <div className="mt-2 space-y-2">
+              {citations.map((cite, i) => {
+                const typeCls = SOURCE_TYPE_STYLES[cite.source_type] || SOURCE_TYPE_STYLES.web;
+                return (
+                  <div key={i} className="bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a
+                        href={cite.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center gap-1 min-w-0"
+                      >
+                        <span className="truncate">{cite.title || cite.url}</span>
+                        <ExternalLink size={10} className="flex-shrink-0" />
+                      </a>
+                      {cite.source_type && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded border ${typeCls}`}>
+                          {cite.source_type}
+                        </span>
+                      )}
+                      {cite.date && (
+                        <span className="text-[10px] text-gray-600">{cite.date}</span>
+                      )}
+                    </div>
+                    {cite.snippet && (
+                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{cite.snippet}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Expandable Toulmin breakdown */}

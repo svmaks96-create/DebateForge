@@ -68,6 +68,15 @@ SYNTHESIS PRINCIPLES:
 7. Do NOT pick a winner or declare one position superior.
 8. Produce actionable insight, not just academic analysis.
 
+EVIDENCE ASSESSMENT:
+In addition to theme analysis, evaluate the evidence quality:
+- Which arguments are backed by real citations and which are unsupported?
+- Are the cited sources authoritative? (academic/government > major news > blogs)
+- Do the citations actually support the claims being made?
+- Are there important claims made without any evidence?
+- Note any evidence gaps — questions that could be answered with data but weren't
+Include an "evidence_assessment" field in your output.
+
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
 Output format:
 {{
@@ -113,6 +122,13 @@ Output format:
     "blind_spots": ["Important dimensions not adequately addressed by the council"],
     "key_insights": ["Non-obvious insights that emerged from cross-pollination of perspectives"],
     "open_questions": ["Unanswered questions from the deliberation"],
+    "evidence_assessment": {{
+      "total_citations": 12,
+      "agents_citing": ["A", "B", "C"],
+      "strongest_citation": {{"argument_id": "A2", "why": "Authoritative source directly supporting the claim"}},
+      "unsupported_claims": ["C3 claimed X without evidence"],
+      "evidence_gaps": ["No data cited on actual enterprise AI ROI"]
+    }},
     "nuanced_conclusion": "3-4 paragraph balanced conclusion organized by themes. What the evidence suggests, where it is uncertain, and what a decision-maker should consider."
   }}
 }}"""
@@ -164,6 +180,15 @@ def _build_synthesizer_user_message(
             msg += f"\n  Qualifier: {arg.qualifier or '(none)'}"
             if arg.summary:
                 msg += f"\n  Summary: {arg.summary}"
+            # Include citations if present
+            if arg.citations:
+                msg += "\n  Citations:"
+                for cite in arg.citations:
+                    title = cite.get("title", "Untitled")
+                    url = cite.get("url", "")
+                    msg += f"\n    [Source: {title} — {url}]"
+            else:
+                msg += "\n  [No sources cited]"
             msg += "\n"
 
     msg += "\n=== END TRANSCRIPT ===\n"

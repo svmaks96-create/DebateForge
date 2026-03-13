@@ -2,6 +2,7 @@ import { useState, useEffect, Component } from 'react';
 import {
   FileText, Columns, Handshake, Lightbulb, Loader, CheckCircle,
   AlertTriangle, HelpCircle, Users, ChevronDown, ChevronRight, Eye,
+  Paperclip, Search,
 } from 'lucide-react';
 import api from '../api';
 
@@ -79,6 +80,87 @@ function ConfidenceBadge({ level }) {
   );
 }
 
+/* --- Evidence Quality Section --- */
+function EvidenceQualitySection({ assessment }) {
+  const {
+    total_citations = 0,
+    agents_citing = [],
+    strongest_citation,
+    unsupported_claims = [],
+    evidence_gaps = [],
+  } = assessment;
+
+  return (
+    <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Search size={14} className="text-cyan-400" />
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+          Evidence Quality
+        </h4>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <Paperclip size={12} className="text-cyan-400" />
+          <span className="text-sm text-gray-200 font-medium">{total_citations}</span>
+          <span className="text-xs text-gray-500">total citations</span>
+        </div>
+        {agents_citing.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">Cited by:</span>
+            {agents_citing.map((prefix) => {
+              const color = SEAT_COLORS[prefix] || SEAT_COLORS.A;
+              return (
+                <span key={prefix} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color.bg} ${color.text}`}>
+                  {prefix}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Strongest citation */}
+      {strongest_citation && (
+        <div className="bg-green-500/5 border border-green-500/15 rounded-lg px-3 py-2">
+          <span className="text-[10px] text-green-400/70 font-semibold uppercase">Strongest Citation</span>
+          <p className="text-xs text-gray-300 mt-0.5">
+            <span className="text-gray-500 font-mono">{strongest_citation.argument_id}</span>
+            {' — '}{strongest_citation.why}
+          </p>
+        </div>
+      )}
+
+      {/* Unsupported claims */}
+      {unsupported_claims.length > 0 && (
+        <div className="space-y-2">
+          <h5 className="text-[10px] text-gray-500 uppercase font-semibold">Unsupported Claims</h5>
+          {unsupported_claims.map((claim, i) => (
+            <div key={i} className="flex items-start gap-2 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2">
+              <AlertTriangle size={12} className="text-amber-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-gray-300">{claim}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Evidence gaps */}
+      {evidence_gaps.length > 0 && (
+        <div className="space-y-2">
+          <h5 className="text-[10px] text-gray-500 uppercase font-semibold">Evidence Gaps</h5>
+          {evidence_gaps.map((gap, i) => (
+            <div key={i} className="flex items-start gap-2 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2">
+              <HelpCircle size={12} className="text-gray-500 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-gray-400">{gap}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* --- Tab 1: Synthesis --- */
 function SynthesisTab({ synthesis }) {
   return (
@@ -101,6 +183,11 @@ function SynthesisTab({ synthesis }) {
             {synthesis.nuanced_conclusion}
           </div>
         </div>
+      )}
+
+      {/* Evidence Quality — only shown if evidence_assessment exists */}
+      {synthesis.evidence_assessment && (
+        <EvidenceQualitySection assessment={synthesis.evidence_assessment} />
       )}
     </div>
   );

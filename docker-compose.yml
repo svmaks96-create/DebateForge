@@ -32,6 +32,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://debateforge:debateforge@postgres:5432/debateforge
       REDIS_URL: redis://redis:6379/0
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

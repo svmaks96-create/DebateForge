@@ -5,11 +5,25 @@ import re
 import anthropic
 
 from config import settings
+from search import web_search
 
 logger = logging.getLogger("uvicorn.error")
 
 MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2000
+MAX_SEARCHES_PER_TURN = 3
+
+SEARCH_TOOL = {
+    "name": "web_search",
+    "description": "Search the web for real evidence, data, statistics, or recent news to support or challenge a claim. Use this when making factual claims that benefit from real-world evidence.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Specific factual search query"}
+        },
+        "required": ["query"],
+    },
+}
 
 
 class CouncilAgent:
@@ -73,6 +87,15 @@ RULES:
 5. Vary your arguments across rounds — do not repeat the same points.
 6. Stay in character: argue from your expertise and priorities.
 
+== EVIDENCE ==
+You have access to a web_search tool. Use it to find real evidence when making
+factual claims about data, statistics, studies, or current events. You should:
+- Search BEFORE making claims that rely on specific numbers or facts
+- Cite your sources in the citations field of each argument
+- Be honest if search results contradict your position
+- Max 3 searches per round — choose queries wisely
+- Not every argument needs citations — logical reasoning is also valuable
+
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
 Format:
 {{
@@ -87,7 +110,10 @@ Format:
       "warrant": "Reasoning connecting grounds to claim",
       "backing": "Additional support for the warrant",
       "qualifier": "Conditions or limitations on the claim",
-      "confidence": 7
+      "confidence": 7,
+      "citations": [
+        {{"url": "...", "title": "...", "snippet": "...", "date": "...", "source_type": "news|academic|government|web"}}
+      ]
     }}
   ],
   "summary": "Brief summary of your perspective this round"
@@ -95,6 +121,7 @@ Format:
 
 The "confidence" field is required: an integer 0-10 reflecting how genuinely confident you are.
 The "stance" field is required: how you feel about this particular point.
+The "citations" field: list of sources from your web searches (empty list [] if none).
 The "type" field options:
 - "claim": a new point or assertion
 - "rebuttal": directly countering another member's argument
@@ -143,22 +170,108 @@ The "type" field options:
             round_type, round_number, conversation_history
         )
 
+        messages = [{"role": "user", "content": user_message}]
+        search_count = 0
+
         for attempt in range(2):
             try:
                 response = await self.client.messages.create(
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
                     system=system_prompt,
-                    messages=[{"role": "user", "content": user_message}],
+                    messages=messages,
+                    tools=[SEARCH_TOOL],
                 )
-                raw_text = response.content[0].text
+
+                # Tool-use loop: handle web_search calls
+                while response.stop_reason == "tool_use" and search_count < MAX_SEARCHES_PER_TURN:
+                    # Collect all tool_use blocks from the response
+                    assistant_content = response.content
+                    tool_results = []
+
+                    for block in assistant_content:
+                        if block.type == "tool_use" and block.name == "web_search":
+                            search_count += 1
+                            query = block.input.get("query", "")
+                            logger.info(
+                                "Agent %s searching (%d/%d): %s",
+                                self.argument_prefix, search_count, MAX_SEARCHES_PER_TURN, query[:80],
+                            )
+                            results = await web_search(query)
+                            formatted = self._format_search_results(results)
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": formatted,
+                            })
+
+                    if not tool_results:
+                        break
+
+                    messages.append({"role": "assistant", "content": assistant_content})
+                    messages.append({"role": "user", "content": tool_results})
+
+                    response = await self.client.messages.create(
+                        model=MODEL,
+                        max_tokens=MAX_TOKENS,
+                        system=system_prompt,
+                        messages=messages,
+                        tools=[SEARCH_TOOL],
+                    )
+
+                # Extract final text response
+                raw_text = ""
+                for block in response.content:
+                    if hasattr(block, "text"):
+                        raw_text += block.text
+
+                if not raw_text:
+                    logger.warning("Agent %s returned no text, using fallback", self.argument_prefix)
+                    return self._fallback_response()
+
                 return self.parse_response(raw_text)
+
             except anthropic.APIError as e:
                 if attempt == 0:
                     logger.warning("Claude API error on attempt 1, retrying: %s", e)
+                    messages = [{"role": "user", "content": user_message}]
+                    search_count = 0
                     continue
                 logger.error("Claude API error on attempt 2, raising: %s", e)
                 raise
+
+    def _format_search_results(self, results: list[dict]) -> str:
+        if not results:
+            return "No results found."
+        lines = []
+        for r in results:
+            lines.append(f"[{r.get('source_type', 'web')}] {r.get('title', 'Untitled')}")
+            lines.append(f"  URL: {r.get('url', '')}")
+            if r.get("date"):
+                lines.append(f"  Date: {r['date']}")
+            lines.append(f"  {r.get('snippet', '')}")
+            lines.append("")
+        return "\n".join(lines)
+
+    def _fallback_response(self) -> dict:
+        return {
+            "arguments": [
+                {
+                    "id": f"{self.argument_prefix}1",
+                    "type": "claim",
+                    "stance": "neutral",
+                    "targets": [],
+                    "claim": "Unable to generate structured response",
+                    "grounds": "",
+                    "warrant": "",
+                    "backing": "",
+                    "qualifier": "",
+                    "confidence": 5,
+                    "citations": [],
+                }
+            ],
+            "summary": "Fallback response",
+        }
 
     async def generate_final_position(
         self,

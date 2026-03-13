@@ -192,6 +192,7 @@ async def _run_deliberation_inner(debate_id: uuid.UUID, db: AsyncSession) -> Non
                     backing=arg_data.get("backing"),
                     qualifier=arg_data.get("qualifier"),
                     summary=response.get("summary"),
+                    citations=arg_data.get("citations", []),
                     raw_response=response,
                 )
                 db.add(arg)
