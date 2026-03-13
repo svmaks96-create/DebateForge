@@ -105,6 +105,11 @@ export default function useDebateStream(debateId) {
       disconnect();
     });
 
+    es.addEventListener('debate_stopped', (e) => {
+      setStatus('stopped');
+      disconnect();
+    });
+
     es.addEventListener('error', (e) => {
       if (e.data) {
         try {

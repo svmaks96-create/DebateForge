@@ -10,7 +10,7 @@ from search import web_search
 logger = logging.getLogger("uvicorn.error")
 
 MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 2000
+MAX_TOKENS = 4096
 MAX_SEARCHES_PER_TURN = 3
 
 SEARCH_TOOL = {
@@ -26,6 +26,88 @@ SEARCH_TOOL = {
 }
 
 
+def _repair_truncated_json(raw_text: str) -> dict | None:
+    """Attempt to recover arguments from truncated JSON output.
+
+    When MAX_TOKENS cuts off the response mid-JSON, we extract whatever
+    complete argument objects exist in the truncated text.
+    """
+    # Strip markdown code fences if present
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```\s*$", "", text)
+
+    # Find the arguments array start
+    match = re.search(r'"arguments"\s*:\s*\[', text)
+    if not match:
+        return None
+
+    array_start = match.end() - 1  # position of '['
+
+    # Extract complete JSON objects from the array using brace matching
+    complete_args = []
+    i = array_start + 1  # skip '['
+    while i < len(text):
+        # Skip whitespace and commas
+        while i < len(text) and text[i] in " \t\n\r,":
+            i += 1
+        if i >= len(text) or text[i] != "{":
+            break
+        # Try to extract a complete object
+        obj_str = _extract_json_object(text[i:])
+        if not obj_str:
+            break  # Incomplete object — stop here
+        try:
+            obj = json.loads(obj_str)
+            complete_args.append(obj)
+        except json.JSONDecodeError:
+            break
+        i += len(obj_str)
+
+    if not complete_args:
+        return None
+
+    logger.info("Recovered %d arguments from truncated JSON", len(complete_args))
+    return {
+        "arguments": complete_args,
+        "summary": complete_args[-1].get("claim", "") if complete_args else "",
+    }
+
+
+def _extract_json_object(text: str) -> str | None:
+    """Find the outermost JSON object in text by matching braces.
+
+    Handles preamble text before JSON, nested braces, and strings containing braces.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if escape:
+            escape = False
+            continue
+        if c == "\\":
+            escape = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
 class CouncilAgent:
     def __init__(
         self,
@@ -35,6 +117,7 @@ class CouncilAgent:
         argument_prefix: str,
         seat_number: int,
         council_members: list[dict],
+        enable_search: bool = True,
     ):
         self.identity = identity
         self.topic = topic
@@ -42,6 +125,7 @@ class CouncilAgent:
         self.argument_prefix = argument_prefix
         self.seat_number = seat_number
         self.council_members = council_members
+        self.enable_search = enable_search
         self.client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     def _build_system_prompt(self) -> str:
@@ -173,6 +257,9 @@ The "type" field options:
         messages = [{"role": "user", "content": user_message}]
         search_count = 0
 
+        # Only pass tools when search is enabled
+        tool_kwargs = {"tools": [SEARCH_TOOL]} if self.enable_search else {}
+
         for attempt in range(2):
             try:
                 response = await self.client.messages.create(
@@ -180,11 +267,11 @@ The "type" field options:
                     max_tokens=MAX_TOKENS,
                     system=system_prompt,
                     messages=messages,
-                    tools=[SEARCH_TOOL],
+                    **tool_kwargs,
                 )
 
                 # Tool-use loop: handle web_search calls
-                while response.stop_reason == "tool_use" and search_count < MAX_SEARCHES_PER_TURN:
+                while self.enable_search and response.stop_reason == "tool_use" and search_count < MAX_SEARCHES_PER_TURN:
                     # Collect all tool_use blocks from the response
                     assistant_content = response.content
                     tool_results = []
@@ -216,7 +303,7 @@ The "type" field options:
                         max_tokens=MAX_TOKENS,
                         system=system_prompt,
                         messages=messages,
-                        tools=[SEARCH_TOOL],
+                        **tool_kwargs,
                     )
 
                 # Extract final text response
@@ -345,6 +432,11 @@ Be honest. If the deliberation changed your thinking, say so. If you remain firm
                 raise
 
     def _parse_position_response(self, raw_text: str) -> dict:
+        logger.info(
+            "Agent %s position raw (first 200 chars): %s",
+            self.argument_prefix, raw_text[:200],
+        )
+
         # Try 1: direct JSON parse
         try:
             data = json.loads(raw_text)
@@ -353,8 +445,8 @@ Be honest. If the deliberation changed your thinking, say so. If you remain firm
         except json.JSONDecodeError:
             pass
 
-        # Try 2: extract from markdown code block
-        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+        # Try 2: extract from markdown code block (greedy for nested braces)
+        match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", raw_text, re.DOTALL)
         if match:
             try:
                 data = json.loads(match.group(1))
@@ -363,8 +455,21 @@ Be honest. If the deliberation changed your thinking, say so. If you remain firm
             except json.JSONDecodeError:
                 pass
 
-        # Try 3: fallback
-        logger.warning("Could not parse position response as JSON, using fallback")
+        # Try 3: find JSON object in text with preamble
+        json_str = _extract_json_object(raw_text)
+        if json_str:
+            try:
+                data = json.loads(json_str)
+                if "overall_stance" in data:
+                    return data
+            except json.JSONDecodeError:
+                pass
+
+        # Try 4: fallback
+        logger.warning(
+            "Could not parse position response as JSON, using fallback. Raw: %s",
+            raw_text[:500],
+        )
         return {
             "overall_stance": "uncertain",
             "confidence": 5,
@@ -375,26 +480,49 @@ Be honest. If the deliberation changed your thinking, say so. If you remain firm
         }
 
     def parse_response(self, raw_text: str) -> dict:
+        logger.info(
+            "Agent %s raw response (first 200 chars): %s",
+            self.argument_prefix, raw_text[:200],
+        )
+
         # Try 1: direct JSON parse
         try:
             data = json.loads(raw_text)
-            if "arguments" in data and "summary" in data:
+            if "arguments" in data:
                 return data
         except json.JSONDecodeError:
             pass
 
-        # Try 2: extract from markdown code block
-        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+        # Try 2: extract from markdown code block (greedy to handle nested braces)
+        match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", raw_text, re.DOTALL)
         if match:
             try:
                 data = json.loads(match.group(1))
-                if "arguments" in data and "summary" in data:
+                if "arguments" in data:
                     return data
             except json.JSONDecodeError:
                 pass
 
-        # Try 3: fallback
-        logger.warning("Could not parse agent response as JSON, using fallback")
+        # Try 3: find JSON object in text with preamble (e.g., "Here is my response:\n{...}")
+        json_str = _extract_json_object(raw_text)
+        if json_str:
+            try:
+                data = json.loads(json_str)
+                if "arguments" in data:
+                    return data
+            except json.JSONDecodeError:
+                pass
+
+        # Try 4: repair truncated JSON (MAX_TOKENS cutoff)
+        repaired = _repair_truncated_json(raw_text)
+        if repaired:
+            return repaired
+
+        # Try 5: fallback
+        logger.warning(
+            "Could not parse agent %s response as JSON, using fallback. Raw: %s",
+            self.argument_prefix, raw_text[:500],
+        )
         return {
             "arguments": [
                 {

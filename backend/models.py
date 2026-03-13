@@ -31,6 +31,8 @@ class Debate(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     synthesis: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     verification_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    enable_search: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    enable_verification: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     rounds = relationship("Round", back_populates="debate", cascade="all, delete-orphan")
     agents = relationship("DebateAgent", back_populates="debate", cascade="all, delete-orphan")

@@ -27,6 +27,8 @@ export default function HomePage() {
   const [agents, setAgents] = useState(Array.from({ length: 4 }, emptyAgent));
   const [generating, setGenerating] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [enableSearch, setEnableSearch] = useState(true);
+  const [enableVerification, setEnableVerification] = useState(true);
   const [recentDebates, setRecentDebates] = useState([]);
 
   useEffect(() => {
@@ -95,6 +97,8 @@ export default function HomePage() {
         format_name: selectedFormat,
         council_size: councilSize,
         agents: agentInputs,
+        enable_search: enableSearch,
+        enable_verification: enableVerification,
       });
 
       const debateId = res.data.id;
@@ -144,7 +148,35 @@ export default function HomePage() {
         <FormatSelector selected={selectedFormat} onSelect={setSelectedFormat} />
       </section>
 
-      {/* Section 3: Council Setup */}
+      {/* Section 3: Cost Options */}
+      <section>
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Options</h2>
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableSearch}
+              onChange={e => setEnableSearch(e.target.checked)}
+              className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/30 focus:ring-offset-0 cursor-pointer"
+            />
+            <span className="text-sm text-gray-300">Enable web search (agents cite real sources)</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableVerification}
+              onChange={e => setEnableVerification(e.target.checked)}
+              className="w-4 h-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/30 focus:ring-offset-0 cursor-pointer"
+            />
+            <span className="text-sm text-gray-300">Enable verification (independent fact-checking)</span>
+          </label>
+          {!enableSearch && !enableVerification && (
+            <p className="text-xs text-amber-400/70 pl-7">Disabling both saves ~75% on API costs</p>
+          )}
+        </div>
+      </section>
+
+      {/* Section 4: Council Setup */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Council Members</h2>

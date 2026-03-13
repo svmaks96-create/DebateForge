@@ -14,7 +14,7 @@ from search import web_search
 
 logger = logging.getLogger("uvicorn.error")
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-haiku-4-5-20251001"
 MAX_TOKENS = 4096
 MAX_SEARCHES = 5
 
