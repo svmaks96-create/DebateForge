@@ -292,6 +292,50 @@ Each seat gets a distinct color (used in UI for badges, borders, charts):
 - [x] Step 14: Build frontend + deploy to Nginx
 - [x] Step 15: Test end-to-end + commit + merge to main
 
+## Evidence Mode (Current Build)
+Agents can search the web for real evidence using Tavily API during deliberation.
+
+### How It Works
+- Agents use Claude's tool_use feature with a web_search tool
+- Agent decides when to search based on claims they want to make
+- Max 3 searches per agent per round (cost control)
+- Search results cached in Redis (same query within 1 hour returns cached)
+- Each argument gains a `citations` field: list of {url, title, snippet, date, source_type}
+- Synthesizer evaluates citation quality alongside arguments
+
+### Backend Changes
+- New file: backend/search.py — Tavily search wrapper with Redis caching
+- Updated: backend/agent.py — tool_use integration, search tool schema, handle tool responses
+- Updated: backend/models.py — citations JSONB column on arguments table
+- Updated: backend/judge.py — synthesizer evaluates evidence quality
+- Updated: backend/config.py — TAVILY_API_KEY setting
+- Updated: docker-compose.yml — pass TAVILY_API_KEY to api container
+
+### Frontend Changes
+- Updated: ArgumentCard.jsx — show citation links, source count badge
+- Updated: AnalysisDashboard.jsx — evidence quality section in Synthesis tab
+
+### New Synthesis Fields
+```json
+"evidence_assessment": {
+  "total_citations": 12,
+  "agents_citing": ["A", "B", "C"],
+  "strongest_citation": {"argument_id": "A2", "why": "..."},
+  "unsupported_claims": ["C3 claimed X without evidence"],
+  "evidence_gaps": ["No data cited on Y"]
+}
+```
+
+### Evidence Mode Build Steps
+- [ ] E1: Add TAVILY_API_KEY to config.py + docker-compose.yml
+- [ ] E2: Create backend/search.py (Tavily wrapper + Redis cache)
+- [ ] E3: Update models.py (citations JSONB on arguments)
+- [ ] E4: Update agent.py (tool_use with web_search)
+- [ ] E5: Update judge.py (synthesizer evaluates citations)
+- [ ] E6: Update frontend ArgumentCard (citation display)
+- [ ] E7: Update frontend AnalysisDashboard (evidence quality)
+- [ ] E8: Test end-to-end + deploy
+
 ## Future: Quality Upgrades (build in order)
 1. Evidence Mode — agents search web, cite real sources (6-8 hrs)
 2. Adversarial Verification — fact-checker agent (4-5 hrs)
