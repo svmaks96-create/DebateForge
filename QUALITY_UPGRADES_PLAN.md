@@ -4,120 +4,29 @@ Four features to transform DebateForge from opinion-based dialectics into eviden
 
 ---
 
-## Feature 1: Evidence Mode (Web Search + Citations)
+## ✅ Feature 1: Evidence Mode (Web Search + Citations) — COMPLETED
 
-**Estimated Effort:** 6-8 hours
+Implemented with Tavily API for web search, Redis caching (1hr TTL), max 3 searches per agent per round. Toggle: `enable_search` per debate. Agent system prompt conditionally includes EVIDENCE section and citations JSON field only when enabled (prevents hallucinated citations when off).
 
-### Problem It Solves
-Agents currently argue from Claude's training data alone. Arguments sound plausible but lack verifiable sources. Users can't distinguish well-supported claims from confident-sounding speculation. For real decision-making, teams need arguments backed by citable evidence they can verify themselves.
-
-### How It Works
-1. When Evidence Mode is enabled on a debate, agents use Claude's `tool_use` feature to call a web search tool (Tavily API) during argument generation.
-2. Each agent can make 1-3 search queries per argument to find supporting evidence.
-3. Search results are injected into the agent's context. The agent must cite specific sources in its structured JSON output — each Toulmin field (grounds, warrant, backing) can reference numbered sources.
-4. Sources are stored alongside arguments with URL, title, snippet, and relevance score.
-5. The synthesizer receives all cited sources and evaluates citation quality: source diversity, recency, authority, and whether the cited content actually supports the claim.
-6. Frontend displays source links inline on argument cards and shows evidence quality badges.
-
-### Backend Changes
-- **New file: `backend/search.py`** — Tavily API wrapper with async client. Functions: `search_web(query, max_results=5)` → returns `[{url, title, snippet, score}]`. Caches results in Redis (1-hour TTL) to avoid duplicate searches across agents.
-- **`backend/config.py`** — Add `TAVILY_API_KEY` env var.
-- **`backend/agent.py`** — When evidence mode is on, construct Claude messages with `tools` parameter defining a `web_search` tool. Handle `tool_use` response blocks: execute search, append results, continue generation. Cap at 3 tool calls per argument to control cost and latency.
-- **`backend/judge.py`** — Add citation quality evaluation section to synthesizer prompt. Synthesizer rates overall evidence quality per side, flags unsupported claims, and notes when both sides cite the same source differently.
-- **`backend/models.py`** — Add `evidence_sources` JSONB column to `arguments` table. Add `evidence_mode` BOOLEAN DEFAULT false to `debates` table.
-- **`backend/schemas.py`** — Update `DebateCreate` schema to accept `evidence_mode` flag. Update `ArgumentResponse` to include sources. Add `EvidenceSource` Pydantic model.
-- **`backend/debate_engine.py`** — Pass evidence_mode flag to agent calls. Include source summary in cross-round context so agents can reference and challenge each other's sources.
-- **`backend/events.py`** — New SSE event type `evidence_found` to stream search results as they happen.
-- **`.env`** — Add `TAVILY_API_KEY`.
-- **`docker-compose.yml`** — Pass `TAVILY_API_KEY` to api service.
-
-### Frontend Changes
-- **`src/pages/HomePage.jsx`** — Add "Evidence Mode" toggle in debate configuration (below format selector). Show tooltip explaining what it does and that it adds ~15s per argument.
-- **`src/components/ArgumentCard.jsx`** — When argument has sources, render a collapsible "Sources" section at the bottom. Each source shows: favicon, title (as link), snippet preview, relevance badge (high/medium/low based on score).
-- **`src/components/EvidenceBadge.jsx`** — New component. Shows a small badge on ArgumentCard: green shield = well-sourced (3+ sources), yellow = partial (1-2), gray = no sources. Tooltip shows source count.
-- **`src/components/AnalysisDashboard.jsx`** — Add "Evidence Quality" section to synthesis display. Show per-side evidence stats: total sources cited, unique domains, average recency. Flag any claims the synthesizer marked as unsupported.
-- **`src/hooks/useDebateStream.js`** — Handle `evidence_found` SSE event. Show brief toast or inline indicator when agent finds a source during live viewing.
-
-### Cost Impact
-- **Tavily API:** $0.01 per search call. With 3 searches per argument, 2 agents, 3 rounds = ~18 searches = ~$0.18/debate.
-- **Claude API:** tool_use adds ~20-30% more tokens per agent call due to tool definitions + result injection. Roughly +$0.03-0.05/debate.
-- **Total per debate:** ~$0.20-0.25 additional when Evidence Mode is on. Zero cost when off.
-
-### Build Steps
-1. Sign up for Tavily API, add key to `.env` and `config.py`
-2. Create `backend/search.py` with Tavily async client + Redis caching
-3. Add `evidence_mode` column to debates, `evidence_sources` column to arguments (model + migration)
-4. Update `agent.py` to use Claude tool_use with web_search tool definition
-5. Handle tool_use loop: detect tool_use blocks → call Tavily → append results → resume
-6. Update agent JSON output schema to include `sources: [{url, title, snippet, supports_field}]`
-7. Update `debate_engine.py` to pass evidence flag and include source summaries in context
-8. Update `judge.py` synthesizer prompt with citation quality evaluation instructions
-9. Add `evidence_found` SSE event to `events.py`
-10. Frontend: Add Evidence Mode toggle to HomePage
-11. Frontend: Build EvidenceBadge component
-12. Frontend: Add Sources section to ArgumentCard
-13. Frontend: Add Evidence Quality section to AnalysisDashboard
-14. Frontend: Handle `evidence_found` in useDebateStream
-15. Test end-to-end with a real debate topic
+**Key implementation details vs original plan:**
+- Column name: `citations` (not `evidence_sources`) on arguments table
+- Flag name: `enable_search` (not `evidence_mode`) on debates table
+- Synthesizer evidence_assessment section is conditional on `enable_search`
 
 ---
 
-## Feature 2: Adversarial Verification (Fact-Checker Agent)
+## ✅ Feature 2: Adversarial Verification (Fact-Checker Agent) — COMPLETED
 
-**Estimated Effort:** 4-5 hours
+Implemented with Claude Haiku (not Sonnet — cost optimization) for the verification agent. Max 5 web searches. Toggle: `enable_verification` per debate. Runs after reflecting phase, before synthesis. Synthesizer receives verification report and incorporates findings conditionally.
 
-### Problem It Solves
-Even with Evidence Mode, both sides can cherry-pick favorable evidence and ignore inconvenient facts. There's no independent voice asking "what are both sides missing?" or "does this claim actually hold up?" Real analysis needs a devil's advocate that challenges everyone equally — finding blind spots, missing perspectives, and logical gaps that neither side has incentive to raise.
-
-### How It Works
-1. After all debate rounds complete (but before synthesis), a third "Verifier" agent runs.
-2. The Verifier receives the full debate transcript and has access to web search (same Tavily integration from Feature 1, or works independently if Evidence Mode is off).
-3. It performs 3 tasks:
-   - **Claim verification:** Spot-checks the strongest claims from each side. Searches for contradicting evidence. Rates each checked claim: verified / partially supported / unverified / contradicted.
-   - **Blind spot analysis:** Identifies important perspectives, stakeholders, or evidence categories neither side addressed. Searches for what's missing.
-   - **Logic audit:** Flags logical gaps, unstated assumptions, and places where the argument structure (Toulmin) has weak links.
-4. Verifier outputs a structured verification report.
-5. The synthesizer receives this report alongside the debate transcript, incorporating it into the final synthesis — specifically the `evidence_gaps` and `unresolved_tensions` sections become much richer.
-6. Frontend shows the verification report as a distinct section in the analysis dashboard.
-
-### Backend Changes
-- **New file: `backend/verifier.py`** — Verification agent class. Takes full debate transcript + search capability. System prompt instructs it to be skeptical of both sides equally. Outputs structured JSON: `{claims_checked: [{claim, source_arg, verdict, counter_evidence, search_queries}], blind_spots: [{area, why_important, what_to_search}], logic_gaps: [{argument_index, gap_type, description}]}`.
-- **`backend/debate_engine.py`** — Add verification phase between final round and synthesis. New status value: `verifying` (between `running` and `judging`). Call `verifier.py` after rounds complete. Pass verification report to synthesizer.
-- **`backend/models.py`** — Add `verification_report` JSONB column to `debates` table. Update status enum to include `verifying`.
-- **`backend/schemas.py`** — Add `VerificationReport`, `ClaimCheck`, `BlindSpot`, `LogicGap` Pydantic models. Update `DebateResponse` to include verification report.
-- **`backend/judge.py`** — Extend synthesizer prompt: "You also have an independent verification report. Incorporate its findings — especially any contradicted claims, blind spots, and logic gaps — into your synthesis. Be explicit about what the verification found."
-- **`backend/events.py`** — New SSE events: `verification_started`, `claim_checked`, `verification_complete`. Stream individual claim checks as they happen for live feedback.
-- **`backend/config.py`** — Add `ENABLE_VERIFICATION` flag (default true). Some users may want to skip for speed/cost.
-
-### Frontend Changes
-- **`src/pages/HomePage.jsx`** — Add "Adversarial Verification" toggle (default on). Brief description: "An independent fact-checker will verify claims and find blind spots after the debate."
-- **`src/components/VerificationReport.jsx`** — New component. Three sections:
-  - **Claim Checks:** Table showing checked claims with verdict badges (green ✓ verified, yellow ~ partial, red ✗ contradicted). Expandable rows show counter-evidence and search queries used.
-  - **Blind Spots:** Cards showing missing perspectives with importance rating.
-  - **Logic Gaps:** Inline annotations referencing specific argument IDs.
-- **`src/components/AnalysisDashboard.jsx`** — Add VerificationReport as a tab/section alongside the existing synthesis. Show a "Verification" badge on the dashboard header with a summary stat (e.g., "3/5 claims verified").
-- **`src/components/ArgumentCard.jsx`** — If a claim was checked by the verifier, show a small verification badge on the card (verified/partial/contradicted) linking to the full check.
-- **`src/hooks/useDebateStream.js`** — Handle verification SSE events. Show "Verifying claims..." status during verification phase.
-- **`src/components/LiveViewer.jsx`** — Show verification phase as a distinct stage with its own progress indicators.
-
-### Cost Impact
-- **Claude API:** One additional Sonnet call with full transcript context. ~$0.05-0.10 depending on debate length.
-- **Tavily API:** Verifier makes 5-10 searches for claim checking + blind spots. ~$0.05-0.10.
-- **Total per debate:** ~$0.10-0.20 additional. Can be disabled per debate.
-
-### Build Steps
-1. Create `backend/verifier.py` with verification agent class and structured output schema
-2. Add `verification_report` column to debates model, add `verifying` status
-3. Update `debate_engine.py` to add verification phase after rounds, before synthesis
-4. Add verification SSE events to `events.py`
-5. Update `judge.py` to incorporate verification report into synthesis prompt
-6. Update schemas for verification report response
-7. Frontend: Add verification toggle to HomePage
-8. Frontend: Build VerificationReport component with claim checks, blind spots, logic gaps
-9. Frontend: Add verification badges to ArgumentCard
-10. Frontend: Integrate VerificationReport into AnalysisDashboard
-11. Frontend: Handle verification SSE events in useDebateStream and LiveViewer
-12. Test with Evidence Mode on and off (verifier should work in both modes)
+**Key implementation details vs original plan:**
+- Model: `claude-haiku-4-5-20251001` (cheaper than Sonnet for fact-checking)
+- Max tokens: 8192 (increased from initial 4096)
+- Flag name: `enable_verification` (not `ENABLE_VERIFICATION` config) — per-debate toggle on debates table
+- Synthesizer max_tokens increased to 16000 (was 4096, caused truncation)
+- Added `_repair_truncated_json` in judge.py to salvage partial synthesis output
+- Synthesizer verification_summary section is conditional on `enable_verification`
+- SSE events: `verification_start`, `verification_complete` (not `claim_checked` per-claim streaming)
 
 ---
 
@@ -311,49 +220,54 @@ frontend/src/components/
 ### Modified Files (All Features Combined)
 ```
 backend/
-├── config.py              # +TAVILY_API_KEY, +ENABLE_VERIFICATION
-├── models.py              # +evidence_mode, +evidence_sources, +verification_report,
-│                          #  +confidence_history, +reflections, +framework
-├── schemas.py             # +EvidenceSource, +VerificationReport, +ConfidencePoint,
-│                          #  +AgentReflection, +FrameworkConfig
-├── agent.py               # +tool_use for search, +confidence tracking,
-│                          #  +reflection generation, +framework focus injection
-├── judge.py               # +citation eval, +verification integration,
-│                          #  +evolution analysis, +framework sections
-├── debate_engine.py       # +evidence passing, +reflection phase,
-│                          #  +verification phase, +framework loading
-├── events.py              # +evidence_found, +verification_*, +confidence_update,
-│                          #  +reflection_* SSE events
+├── config.py              # +TAVILY_API_KEY (Features 1,2 ✅)
+├── models.py              # +enable_search, +citations, +verification_report,
+│                          #  +enable_verification (✅), +confidence_history,
+│                          #  +reflections, +framework (planned)
+├── schemas.py             # +CitationData, +enable_search/enable_verification (✅),
+│                          #  +ConfidencePoint, +AgentReflection, +FrameworkConfig (planned)
+├── agent.py               # +tool_use for search, +conditional EVIDENCE prompt (✅),
+│                          #  +confidence tracking, +reflection generation,
+│                          #  +framework focus injection (planned)
+├── judge.py               # +conditional evidence_assessment/verification_summary (✅),
+│                          #  +truncated JSON repair, +16000 max_tokens (✅),
+│                          #  +evolution analysis, +framework sections (planned)
+├── debate_engine.py       # +enable_search passing, +verification phase (✅),
+│                          #  +reflection phase, +framework loading (planned)
+├── events.py              # +verification_start, +verification_complete (✅),
+│                          #  +confidence_update, +reflection_* (planned)
 └── routes/
-    ├── debates.py         # Updated schemas for new fields
-    └── formats.py         # +GET /api/frameworks endpoint
+    ├── debates.py         # Updated schemas for new fields (✅)
+    └── formats.py         # +GET /api/frameworks endpoint (planned)
 
 frontend/src/
 ├── pages/
-│   ├── HomePage.jsx       # +Evidence toggle, +Verification toggle,
-│   │                      #  +FrameworkSelector, +persona auto-fill
-│   └── DebatePage.jsx     # Handles new phases in live view
+│   ├── HomePage.jsx       # +Evidence toggle, +Verification toggle (✅),
+│   │                      #  +FrameworkSelector, +persona auto-fill (planned)
+│   └── DebatePage.jsx     # Handles verification phase in live view (✅)
 ├── components/
-│   ├── ArgumentCard.jsx   # +sources section, +verification badge,
-│   │                      #  +confidence badge with delta
-│   ├── AnalysisDashboard.jsx  # +Evidence Quality, +VerificationReport,
+│   ├── ArgumentCard.jsx   # +citations section, +verification badge (✅),
+│   │                      #  +confidence badge with delta (planned)
+│   ├── AnalysisDashboard.jsx  # +Evidence Quality, +Verification section (✅),
 │   │                          #  +ConfidenceTimeline, +ReflectionPanel,
-│   │                          #  +framework-specific sections
-│   ├── AgentSetup.jsx     # +framework persona suggestions
-│   └── LiveViewer.jsx     # +verification phase display
+│   │                          #  +framework-specific sections (planned)
+│   ├── AgentSetup.jsx     # +framework persona suggestions (planned)
+│   └── LiveViewer.jsx     # +verification phase display (✅)
 └── hooks/
-    └── useDebateStream.js # +evidence, +verification, +confidence SSE handlers
+    └── useDebateStream.js # +verification SSE handlers (✅),
+                           #  +confidence SSE handlers (planned)
 ```
 
 ### New Database Columns
-| Table | Column | Type | Feature |
-|-------|--------|------|---------|
-| debates | evidence_mode | BOOLEAN DEFAULT false | 1 |
-| debates | verification_report | JSONB | 2 |
-| debates | reflections | JSONB | 3 |
-| debates | framework | VARCHAR(50) DEFAULT 'general' | 4 |
-| arguments | evidence_sources | JSONB | 1 |
-| debate_agents | confidence_history | JSONB | 3 |
+| Table | Column | Type | Feature | Status |
+|-------|--------|------|---------|--------|
+| debates | enable_search | BOOLEAN DEFAULT true | 1 | ✅ Done |
+| debates | enable_verification | BOOLEAN DEFAULT true | 2 | ✅ Done |
+| debates | verification_report | JSONB | 2 | ✅ Done |
+| debates | reflections | JSONB | 3 | Planned |
+| debates | framework | VARCHAR(50) DEFAULT 'general' | 4 | Planned |
+| arguments | citations | JSONB DEFAULT '[]' | 1 | ✅ Done |
+| debate_agents | confidence_history | JSONB | 3 | Planned |
 
 ### New API Endpoints
 | Method | Path | Feature |
@@ -361,15 +275,13 @@ frontend/src/
 | GET | /api/frameworks | 4 |
 
 ### New SSE Event Types
-| Event | Payload | Feature |
-|-------|---------|---------|
-| evidence_found | {argument_index, source} | 1 |
-| verification_started | {} | 2 |
-| claim_checked | {claim, verdict} | 2 |
-| verification_complete | {report} | 2 |
-| confidence_update | {agent_id, round, confidence} | 3 |
-| reflection_started | {agent_id} | 3 |
-| reflection_complete | {agent_id, reflection} | 3 |
+| Event | Payload | Feature | Status |
+|-------|---------|---------|--------|
+| verification_start | {} | 2 | ✅ Done |
+| verification_complete | {overall_reliability, verified_count, blind_spots_count} | 2 | ✅ Done |
+| confidence_update | {agent_id, round, confidence} | 3 | Planned |
+| reflection_started | {agent_id} | 3 | Planned |
+| reflection_complete | {agent_id, reflection} | 3 | Planned |
 
 ## Total Cost Estimates
 
@@ -378,10 +290,10 @@ frontend/src/
 |-----------|-----|-----|
 | Base Claude (agents + synthesizer) | $0.15 | $0.30 |
 | Evidence Mode (Tavily + extra tokens) | $0.20 | $0.25 |
-| Adversarial Verification (Claude + Tavily) | $0.10 | $0.20 |
+| Adversarial Verification (Haiku + Tavily) | $0.03 | $0.10 |
 | Position Evolution (reflections) | $0.04 | $0.16 |
 | Decision Frameworks | $0.00 | $0.00 |
-| **Total** | **$0.49** | **$0.91** |
+| **Total** | **$0.42** | **$0.81** |
 
 ### Per-Debate Cost (Base Only, All Features Off)
 | Component | Min | Max |
@@ -392,7 +304,7 @@ frontend/src/
 ### Monthly Estimates (50 debates/month)
 | Configuration | Min | Max |
 |---------------|-----|-----|
-| All features on | $24.50 | $45.50 |
+| All features on | $21.00 | $40.50 |
 | Base only | $7.50 | $15.00 |
 
 ### External API Keys Required
@@ -402,9 +314,9 @@ frontend/src/
 
 ## Recommended Build Order
 
-1. **Decision Framework Templates** (Feature 4) — Zero API cost, immediate UX improvement, no external dependencies. Establishes the pattern for framework-aware prompts that all other features build on.
-2. **Position Evolution Tracking** (Feature 3) — Low cost, uses existing confidence data. Adds reflection phase that exercises the "post-round agent callback" pattern needed for verification.
-3. **Evidence Mode** (Feature 1) — Requires Tavily API setup. Most impactful feature but also most complex. Build after frameworks so evidence searches are framework-aware.
-4. **Adversarial Verification** (Feature 2) — Builds on Evidence Mode's search infrastructure. Most effective when it can verify cited sources. Build last so it can leverage everything.
+1. ~~**Evidence Mode** (Feature 1)~~ ✅ Completed
+2. ~~**Adversarial Verification** (Feature 2)~~ ✅ Completed
+3. **Position Evolution Tracking** (Feature 3) — Low cost, uses existing confidence data. Adds reflection phase and confidence timeline.
+4. **Decision Framework Templates** (Feature 4) — Zero API cost, immediate UX improvement. Framework-aware prompts for agents and synthesizer.
 
-**Total estimated effort: 18-23 hours across all 4 features.**
+**Remaining estimated effort: 8-10 hours for Features 3 and 4.**

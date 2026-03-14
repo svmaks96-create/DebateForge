@@ -16,6 +16,13 @@ logger = logging.getLogger("uvicorn.error")
 # Only allow 1 concurrent deliberation to avoid overloading Claude API
 _semaphore = asyncio.Semaphore(1)
 
+# Track running deliberation tasks so they can be cancelled
+_running_tasks: dict[uuid.UUID, asyncio.Task] = {}
+
+
+def get_running_task(debate_id: uuid.UUID) -> asyncio.Task | None:
+    return _running_tasks.get(debate_id)
+
 
 def format_conversation_history(arguments: list[Argument], agents_map: dict) -> list[dict]:
     """Group arguments by agent turn for injection into agent prompts.
@@ -63,20 +70,35 @@ def format_conversation_history(arguments: list[Argument], agents_map: dict) -> 
 
 async def run_deliberation(debate_id: uuid.UUID, db_session_factory) -> None:
     """Orchestrate a full council deliberation from start to finish."""
-    async with _semaphore:
-        async with db_session_factory() as db:
-            try:
-                await _run_deliberation_inner(debate_id, db)
-            except Exception as e:
-                logger.exception("Deliberation %s failed: %s", debate_id, e)
+    # Register current task so it can be cancelled from the stop endpoint
+    _running_tasks[debate_id] = asyncio.current_task()
+    try:
+        async with _semaphore:
+            async with db_session_factory() as db:
                 try:
-                    debate = await db.get(Debate, debate_id)
-                    if debate:
-                        debate.status = "error"
-                        await db.commit()
-                    await publish_event(str(debate_id), "error", {"message": str(e)})
-                except Exception:
-                    logger.exception("Failed to set error status for deliberation %s", debate_id)
+                    await _run_deliberation_inner(debate_id, db)
+                except asyncio.CancelledError:
+                    logger.info("Deliberation %s was stopped by user", debate_id)
+                    try:
+                        debate = await db.get(Debate, debate_id)
+                        if debate and debate.status not in ("completed", "error", "stopped", "deleted"):
+                            debate.status = "stopped"
+                            await db.commit()
+                        await publish_event(str(debate_id), "debate_stopped", {"message": "Deliberation stopped by user"})
+                    except Exception:
+                        logger.exception("Failed to set stopped status for deliberation %s", debate_id)
+                except Exception as e:
+                    logger.exception("Deliberation %s failed: %s", debate_id, e)
+                    try:
+                        debate = await db.get(Debate, debate_id)
+                        if debate:
+                            debate.status = "error"
+                            await db.commit()
+                        await publish_event(str(debate_id), "error", {"message": str(e)})
+                    except Exception:
+                        logger.exception("Failed to set error status for deliberation %s", debate_id)
+    finally:
+        _running_tasks.pop(debate_id, None)
 
 
 async def _run_deliberation_inner(debate_id: uuid.UUID, db: AsyncSession) -> None:
@@ -164,6 +186,7 @@ async def _run_deliberation_inner(debate_id: uuid.UUID, db: AsyncSession) -> Non
                 argument_prefix=agent_row.argument_prefix,
                 seat_number=agent_row.seat_number,
                 council_members=council_members,
+                enable_search=debate.enable_search,
             )
 
             # Full conversation history: all prior rounds + earlier agents this round
@@ -247,6 +270,7 @@ async def _run_deliberation_inner(debate_id: uuid.UUID, db: AsyncSession) -> Non
             argument_prefix=agent_row.argument_prefix,
             seat_number=agent_row.seat_number,
             council_members=council_members,
+            enable_search=debate.enable_search,
         )
 
         position_data = await agent.generate_final_position(full_history)
@@ -272,13 +296,22 @@ async def _run_deliberation_inner(debate_id: uuid.UUID, db: AsyncSession) -> Non
             "position_summary": position_data.get("position_summary", ""),
         })
 
+    # === VERIFICATION PHASE (optional) ===
+    verification_report = None
+    if debate.enable_verification:
+        debate.status = "verifying"
+        await db.commit()
+
+        from verifier import verify_deliberation
+        verification_report = await verify_deliberation(debate_id, db)
+
     # === SYNTHESIZING PHASE ===
     debate.status = "synthesizing"
     await db.commit()
     await publish_event(str(debate_id), "synthesis_start", {})
 
     from judge import synthesize_deliberation
-    await synthesize_deliberation(debate_id, db)
+    await synthesize_deliberation(debate_id, db, verification_report=verification_report)
 
     logger.info("Deliberation %s completed successfully", debate_id)
 

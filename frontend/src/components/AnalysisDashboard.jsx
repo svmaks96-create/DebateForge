@@ -2,7 +2,7 @@ import { useState, useEffect, Component } from 'react';
 import {
   FileText, Columns, Handshake, Lightbulb, Loader, CheckCircle,
   AlertTriangle, HelpCircle, Users, ChevronDown, ChevronRight, Eye,
-  Paperclip, Search,
+  Paperclip, Search, ShieldCheck, XCircle,
 } from 'lucide-react';
 import api from '../api';
 
@@ -22,14 +22,6 @@ const STANCE_COLORS = {
   uncertain: 'text-gray-400',
   neutral: 'text-gray-400',
 };
-
-const synthesisTabs = [
-  { id: 'synthesis', label: 'Synthesis', icon: FileText },
-  { id: 'themes', label: 'Themes', icon: Columns },
-  { id: 'positions', label: 'Council Positions', icon: Users },
-  { id: 'consensus', label: 'Consensus & Gaps', icon: Handshake },
-  { id: 'insights', label: 'Insights', icon: Lightbulb },
-];
 
 class TabErrorBoundary extends Component {
   constructor(props) {
@@ -458,7 +450,175 @@ function ConsensusTab({ synthesis }) {
   );
 }
 
-/* --- Tab 5: Insights --- */
+/* --- Tab 5: Verification --- */
+const RELIABILITY_COLORS = {
+  high: 'bg-green-500/20 text-green-400 border-green-500/30',
+  moderate: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  low: 'bg-red-500/20 text-red-400 border-red-500/30',
+};
+
+const SEVERITY_COLORS = {
+  significant: 'bg-red-500/15 text-red-400 border-red-500/30',
+  minor: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+};
+
+const VSTATUS_CONFIG = {
+  verified:       { icon: CheckCircle,   cls: 'border-green-500/15 bg-green-500/5', iconCls: 'text-green-400' },
+  partially_true: { icon: AlertTriangle, cls: 'border-amber-500/15 bg-amber-500/5', iconCls: 'text-amber-400' },
+  disputed:       { icon: AlertTriangle, cls: 'border-amber-500/15 bg-amber-500/5', iconCls: 'text-amber-400' },
+  false:          { icon: XCircle,       cls: 'border-red-500/15 bg-red-500/5',     iconCls: 'text-red-400' },
+  unverifiable:   { icon: HelpCircle,    cls: 'border-white/5 bg-white/[0.03]',     iconCls: 'text-gray-500' },
+};
+
+function VerificationTab({ verificationReport }) {
+  const {
+    verified_claims = [],
+    shared_blind_spots = [],
+    missing_perspectives = [],
+    logical_gaps = [],
+    overall_reliability,
+    reliability_explanation,
+  } = verificationReport;
+
+  const relCls = RELIABILITY_COLORS[overall_reliability] || RELIABILITY_COLORS.low;
+
+  const confirmedClaims = verified_claims.filter((c) => c.verification_status === 'verified');
+  const disputedClaims = verified_claims.filter((c) => ['partially_true', 'disputed', 'false'].includes(c.verification_status));
+
+  return (
+    <div className="space-y-6">
+      {/* Overall reliability */}
+      <div className="flex items-center gap-3">
+        <ShieldCheck size={18} className="text-gray-300" />
+        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${relCls}`}>
+          {overall_reliability ? overall_reliability.charAt(0).toUpperCase() + overall_reliability.slice(1) : 'Unknown'} reliability
+        </span>
+      </div>
+      {reliability_explanation && (
+        <p className="text-sm text-gray-300 leading-relaxed">{reliability_explanation}</p>
+      )}
+
+      {/* Verified Claims */}
+      {confirmedClaims.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Verified Claims</h4>
+          <div className="space-y-2">
+            {confirmedClaims.map((vc, i) => (
+              <div key={i} className="flex items-start gap-3 rounded-xl border border-green-500/15 bg-green-500/5 p-4">
+                <CheckCircle size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-500">{vc.source_argument}</span>
+                  </div>
+                  <p className="text-sm text-gray-300">{vc.claim}</p>
+                  {vc.explanation && <p className="text-xs text-gray-500 mt-1">{vc.explanation}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Disputed Claims */}
+      {disputedClaims.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Disputed Claims</h4>
+          <div className="space-y-2">
+            {disputedClaims.map((vc, i) => {
+              const cfg = VSTATUS_CONFIG[vc.verification_status] || VSTATUS_CONFIG.unverifiable;
+              const StatusIcon = cfg.icon;
+              return (
+                <div key={i} className={`flex items-start gap-3 rounded-xl border ${cfg.cls} p-4`}>
+                  <StatusIcon size={16} className={`${cfg.iconCls} mt-0.5 flex-shrink-0`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-500">{vc.source_argument}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${RELIABILITY_COLORS[vc.verification_status === 'false' ? 'low' : 'moderate'] || ''}`}>
+                        {vc.verification_status?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-300">{vc.claim}</p>
+                    {vc.explanation && <p className="text-xs text-gray-500 mt-1">{vc.explanation}</p>}
+                    {vc.corrected_claim && (
+                      <div className="mt-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2">
+                        <span className="text-[10px] text-green-400/70 font-semibold uppercase">Corrected</span>
+                        <p className="text-xs text-gray-300 mt-0.5">{vc.corrected_claim}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Shared Blind Spots */}
+      {shared_blind_spots.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Shared Blind Spots</h4>
+          <div className="space-y-2">
+            {shared_blind_spots.map((bs, i) => (
+              <div key={i} className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-4 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Eye size={14} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-gray-200 font-medium">{bs.assumption}</p>
+                </div>
+                {bs.challenge && (
+                  <p className="text-xs text-gray-400 ml-[22px]"><span className="text-gray-500 font-medium">Challenge:</span> {bs.challenge}</p>
+                )}
+                {bs.impact && (
+                  <p className="text-xs text-gray-400 ml-[22px]"><span className="text-gray-500 font-medium">Impact:</span> {bs.impact}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Missing Perspectives */}
+      {missing_perspectives.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Missing Perspectives</h4>
+          <div className="space-y-2">
+            {missing_perspectives.map((mp, i) => (
+              <div key={i} className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-4">
+                <HelpCircle size={16} className="text-gray-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-gray-400 leading-relaxed">{mp}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Logical Gaps */}
+      {logical_gaps.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Logical Gaps</h4>
+          <div className="space-y-2">
+            {logical_gaps.map((lg, i) => {
+              const sevCls = SEVERITY_COLORS[lg.severity] || SEVERITY_COLORS.minor;
+              return (
+                <div key={i} className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-4">
+                  <AlertTriangle size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-500">{lg.argument_id}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${sevCls}`}>{lg.severity}</span>
+                    </div>
+                    <p className="text-sm text-gray-300">{lg.gap}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --- Tab 6: Insights --- */
 function InsightsTab({ synthesis }) {
   const insights = synthesis.key_insights || [];
 
@@ -479,7 +639,7 @@ function InsightsTab({ synthesis }) {
 }
 
 /* --- Main Dashboard --- */
-export default function AnalysisDashboard({ debateId, synthesis: initialSynthesis, councilMembers = [] }) {
+export default function AnalysisDashboard({ debateId, synthesis: initialSynthesis, councilMembers = [], verificationReport = null }) {
   const [activeTab, setActiveTab] = useState('synthesis');
   const [analysis, setAnalysis] = useState(null);
   const [positions, setPositions] = useState([]);
@@ -517,10 +677,21 @@ export default function AnalysisDashboard({ debateId, synthesis: initialSynthesi
   }
 
   const synthesis = analysis?.synthesis?.synthesis || analysis?.synthesis || initialSynthesis;
+  const vReport = verificationReport || analysis?.verification_report || null;
 
   if (!synthesis) {
     return <p className="text-sm text-gray-600 text-center py-8">No analysis data available.</p>;
   }
+
+  // Build tabs dynamically — include Verification only when data exists
+  const tabs = [
+    { id: 'synthesis', label: 'Synthesis', icon: FileText },
+    { id: 'themes', label: 'Themes', icon: Columns },
+    { id: 'positions', label: 'Council Positions', icon: Users },
+    { id: 'consensus', label: 'Consensus & Gaps', icon: Handshake },
+    ...(vReport ? [{ id: 'verification', label: 'Verification', icon: ShieldCheck }] : []),
+    { id: 'insights', label: 'Insights', icon: Lightbulb },
+  ];
 
   return (
     <div className="space-y-4">
@@ -530,7 +701,7 @@ export default function AnalysisDashboard({ debateId, synthesis: initialSynthesi
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-white/10 overflow-x-auto">
-        {synthesisTabs.map((tab) => {
+        {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
           return (
@@ -558,6 +729,7 @@ export default function AnalysisDashboard({ debateId, synthesis: initialSynthesi
           {activeTab === 'themes' && <ThemesTab synthesis={synthesis} />}
           {activeTab === 'positions' && <PositionsTab synthesis={synthesis} positions={positions} />}
           {activeTab === 'consensus' && <ConsensusTab synthesis={synthesis} />}
+          {activeTab === 'verification' && vReport && <VerificationTab verificationReport={vReport} />}
           {activeTab === 'insights' && <InsightsTab synthesis={synthesis} />}
         </TabErrorBoundary>
       </div>

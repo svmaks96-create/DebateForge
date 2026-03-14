@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, ArrowRight, ExternalLink, Paperclip } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowRight, ExternalLink, Paperclip, CheckCircle, AlertTriangle, XCircle, HelpCircle } from 'lucide-react';
 
 const SEAT_COLORS = {
   A: { border: 'border-l-[#3B82F6]', badge: 'bg-[#3B82F6]/20 text-[#3B82F6]' },
@@ -19,6 +19,14 @@ const STANCE_CONFIG = {
 
 const HIGHLIGHT_TYPES = new Set(['question', 'build_on']);
 
+const VERIFICATION_BADGES = {
+  verified:       { icon: CheckCircle,   label: 'Verified',     cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  partially_true: { icon: AlertTriangle, label: 'Partially True', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  disputed:       { icon: AlertTriangle, label: 'Disputed',     cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  false:          { icon: XCircle,       label: 'False',        cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  unverifiable:   { icon: HelpCircle,    label: 'Unverifiable', cls: 'bg-gray-500/15 text-gray-400 border-gray-500/30' },
+};
+
 const SOURCE_TYPE_STYLES = {
   academic:   'bg-purple-500/15 text-purple-400 border-purple-500/30',
   government: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
@@ -27,7 +35,7 @@ const SOURCE_TYPE_STYLES = {
   web:        'bg-gray-500/15 text-gray-400 border-gray-500/30',
 };
 
-export default function ArgumentCard({ argument, animate = false }) {
+export default function ArgumentCard({ argument, animate = false, verificationReport = null }) {
   const [expanded, setExpanded] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
 
@@ -39,6 +47,13 @@ export default function ArgumentCard({ argument, animate = false }) {
   const confidence = argument.confidence ?? null;
   const citations = argument.citations || [];
   const hasToulmin = argument.grounds || argument.warrant || argument.backing || argument.qualifier;
+
+  // Find verification status for this argument
+  const argIndex = argument.argument_index || argument.id;
+  const verifiedClaim = verificationReport?.verified_claims?.find(
+    (vc) => vc.source_argument === argIndex
+  );
+  const verificationBadge = verifiedClaim ? VERIFICATION_BADGES[verifiedClaim.verification_status] : null;
 
   return (
     <div
@@ -76,6 +91,16 @@ export default function ArgumentCard({ argument, animate = false }) {
         ) : (
           <span className="text-[10px] text-gray-600">No sources</span>
         )}
+
+        {/* Verification badge */}
+        {verificationBadge && (() => {
+          const VIcon = verificationBadge.icon;
+          return (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${verificationBadge.cls}`}>
+              <VIcon size={9} /> {verificationBadge.label}
+            </span>
+          );
+        })()}
 
         {/* Highlight question / build_on types */}
         {HIGHLIGHT_TYPES.has(argType) && (

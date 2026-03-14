@@ -181,6 +181,8 @@ class CreateDeliberationRequest(BaseModel):
     format_config: dict | None = None
     council_size: int = Field(default=3, ge=2, le=6)
     agents: list[CouncilMemberInput] = Field(default_factory=list)
+    enable_search: bool = True
+    enable_verification: bool = True
 
 
 class ArgumentResponse(BaseModel):
@@ -225,6 +227,9 @@ class DeliberationResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     synthesis: dict | None
+    verification_report: dict | None = None
+    enable_search: bool = True
+    enable_verification: bool = True
 
     model_config = {"from_attributes": True}
 

@@ -1,10 +1,9 @@
 # DebateForge — Feature Roadmap
 
-> Last updated: March 2026
-> Status: v3 council deliberation platform deployed and working
+> Last updated: March 14, 2026
+> Status: v3 council deliberation platform deployed with Evidence Mode + Adversarial Verification
 
-> **For the 4 priority analysis quality upgrades (Evidence Mode, Adversarial Verification,
-> Position Evolution, Decision Frameworks), see QUALITY_UPGRADES_PLAN.md**
+> **For remaining quality upgrades (Position Evolution, Decision Frameworks), see QUALITY_UPGRADES_PLAN.md**
 
 ---
 
@@ -20,77 +19,23 @@
 - Deliberation formats: quick_take, rapid_assessment, standard, deep_dive
 - Auto-generated or manual council members, with persona library
 - Real-time SSE streaming of deliberations
+- **Evidence Mode**: agents search the web (Tavily API) and cite real sources in arguments (optional, per-debate toggle)
+- **Adversarial Verification**: independent fact-checker agent (Haiku) verifies claims and finds blind spots after deliberation (optional, per-debate toggle)
+- **Cost optimization**: conditional prompts (no evidence/verification instructions when disabled), Haiku for cheap tasks, truncated JSON repair
 - React frontend: gate, launcher, live viewer (conversation thread), analysis dashboard (5 tabs), history, persona library
 - Deployed on VPS at http://<IP>:8080, behind invite code auth
 
 ---
 
-## Priority 1: Evidence Mode (Web Search + Citations)
+## ~~Priority 1: Evidence Mode (Web Search + Citations)~~ ✅ COMPLETED
 
-**The big idea:** Agents don't just reason — they research. Each agent can search the web for real
-data, studies, and sources to back their arguments. The synthesizer then evaluates whether citations
-are real, relevant, and correctly interpreted.
+Implemented. Agents use Claude tool_use with Tavily web search API. Max 3 searches per agent per round, cached in Redis (1hr TTL). Citations stored as JSONB on arguments table. Synthesizer evaluates citation quality (conditionally, only when enable_search=True). Toggle: `enable_search` per debate.
 
-### How It Works
+---
 
-1. **Agent gets web search tool access**
-   - Use Claude's tool_use feature to give council agents a web search tool
-   - Agent decides when to search based on what claim it's making
-   - Agent cites sources inline: each argument's `backing` field includes URLs and source summaries
+## ~~Priority 1.5: Adversarial Verification~~ ✅ COMPLETED
 
-2. **Citation format in arguments**
-   ```json
-   {
-     "id": "A1",
-     "claim": "Remote workers are 13% more productive",
-     "grounds": "Stanford study of 16,000 workers over 9 months",
-     "backing": "Bloom et al., 2015, Stanford GSB",
-     "citations": [
-       {
-         "url": "https://...",
-         "title": "Does Working from Home Work?",
-         "snippet": "We find that working from home led to a 13% performance increase...",
-         "source_type": "academic_paper"
-       }
-     ]
-   }
-   ```
-
-3. **Synthesizer evaluates citations**
-   - Are citations real and accessible?
-   - Do they actually support the claim made?
-   - Are they recent enough to be relevant?
-   - Are they authoritative sources (peer-reviewed > blog post > reddit comment)?
-   - Is the agent cherry-picking or fairly representing the source?
-   - New synthesizer output field: `citation_analysis` per argument
-
-4. **Frontend changes**
-   - Citations appear as clickable links in ArgumentCard
-   - Expandable "Sources" section per argument
-   - Synthesis shows citation quality scores
-   - New icon/badge for arguments that are evidence-backed vs purely logical
-
-### Implementation Plan
-
-**Backend changes:**
-- Update `agent.py` to use Claude's tool_use with a web search tool
-- Define a search tool schema: `{"name": "web_search", "description": "Search the web for evidence", "input_schema": {"query": "string"}}`
-- Implement the actual search backend (options: Brave Search API, Tavily API, or SerpAPI)
-- Update argument schema to include `citations` JSONB field
-- Update synthesizer prompt to evaluate citation quality
-- New DB column: `arguments.citations JSONB`
-
-**Frontend changes:**
-- Update ArgumentCard to show citations
-- Add citation quality indicators in AnalysisDashboard
-- Source preview on hover (title, snippet, source type)
-
-**API cost impact:**
-- Each agent call may trigger 1-3 web searches
-- Search API costs (~$0.003-0.01 per search via Brave/Tavily)
-- Total additional cost per deliberation: ~$0.05-0.20
-
-**Estimated effort:** 6-8 hours
+Implemented. After reflecting phase, a Haiku-based verification agent independently fact-checks claims using web search. Produces structured report: verified_claims, shared_blind_spots, missing_perspectives, logical_gaps. Synthesizer incorporates findings (conditionally, only when enable_verification=True). Toggle: `enable_verification` per debate.
 
 ---
 
@@ -194,15 +139,15 @@ are real, relevant, and correctly interpreted.
 
 If continuing development:
 
-1. Quality upgrades (18-23 hrs) — see QUALITY_UPGRADES_PLAN.md for detailed specs
-   a. Decision Framework Templates (4-5 hrs) — zero API cost, immediate UX improvement
-   b. Position Evolution Tracking (4-5 hrs) — confidence timeline + reflections
-   c. Evidence Mode (6-8 hrs) — web search + citations, the big differentiator
-   d. Adversarial Verification (4-5 hrs) — fact-checker agent, builds on evidence mode
-2. Markdown rendering (30 min) — immediate visual improvement
-3. Export as PDF (2-3 hrs) — most requested by stakeholders
-4. Mobile responsive (1-2 hrs) — accessibility
-5. Argument graph D3 (4-6 hrs) — wow factor
-6. Human-in-the-council mode (8-10 hrs) — engagement
-7. Deliberation comparison (4-5 hrs) — decision robustness
-8. Slack integration (1-2 days) — adoption driver
+1. ~~Evidence Mode~~ ✅
+2. ~~Adversarial Verification~~ ✅
+3. Remaining quality upgrades (8-10 hrs) — see QUALITY_UPGRADES_PLAN.md
+   a. Position Evolution Tracking (4-5 hrs) — confidence timeline + reflections
+   b. Decision Framework Templates (4-5 hrs) — zero API cost, immediate UX improvement
+4. Markdown rendering (30 min) — immediate visual improvement
+5. Export as PDF (2-3 hrs) — most requested by stakeholders
+6. Mobile responsive (1-2 hrs) — accessibility
+7. Argument graph D3 (4-6 hrs) — wow factor
+8. Human-in-the-council mode (8-10 hrs) — engagement
+9. Deliberation comparison (4-5 hrs) — decision robustness
+10. Slack integration (1-2 days) — adoption driver

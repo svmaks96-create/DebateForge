@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from auth import require_auth
 from database import async_session, get_db
-from debate_engine import run_deliberation
+from debate_engine import get_running_task, run_deliberation
 from events import get_event_bus
 from models import AgentPosition, Debate, DebateAgent, Persona, Round
 from routes.formats import FORMAT_LOOKUP, PRESET_FORMATS
@@ -43,6 +43,8 @@ async def create_debate(body: CreateDeliberationRequest, db: AsyncSession = Depe
         context=body.context,
         format_config=format_config,
         council_size=body.council_size,
+        enable_search=body.enable_search,
+        enable_verification=body.enable_verification,
         status="configuring",
     )
     db.add(debate)
@@ -140,6 +142,9 @@ async def get_debate(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         created_at=debate.created_at,
         completed_at=debate.completed_at,
         synthesis=debate.synthesis,
+        verification_report=debate.verification_report,
+        enable_search=debate.enable_search,
+        enable_verification=debate.enable_verification,
         council_members=debate.agents,
         rounds=rounds,
     )
@@ -157,6 +162,25 @@ async def start_debate(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     asyncio.create_task(run_deliberation(debate_id, async_session))
 
     return JSONResponse(status_code=202, content={"status": "started", "debate_id": str(debate_id)})
+
+
+@router.post("/{debate_id}/stop")
+async def stop_debate(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    debate = await db.get(Debate, debate_id)
+    if not debate:
+        raise HTTPException(status_code=404, detail="Debate not found")
+    if debate.status in ("completed", "stopped", "error", "deleted", "configuring"):
+        raise HTTPException(status_code=400, detail=f"Debate is '{debate.status}', cannot stop")
+
+    task = get_running_task(debate_id)
+    if task and not task.done():
+        task.cancel()
+        return JSONResponse(status_code=200, content={"status": "stopping", "debate_id": str(debate_id)})
+
+    # No running task but status says it's active — force status update
+    debate.status = "stopped"
+    await db.commit()
+    return JSONResponse(status_code=200, content={"status": "stopped", "debate_id": str(debate_id)})
 
 
 @router.get("/{debate_id}/stream")
@@ -196,6 +220,7 @@ async def get_analysis(debate_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     return {
         "debate_id": str(debate_id),
         "synthesis": debate.synthesis,
+        "verification_report": debate.verification_report,
     }
 
 

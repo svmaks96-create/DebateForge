@@ -83,6 +83,14 @@ export default function useDebateStream(debateId) {
       }]);
     });
 
+    es.addEventListener('verification_start', () => {
+      setStatus('verifying');
+    });
+
+    es.addEventListener('verification_complete', () => {
+      // Verification done, synthesis will start next
+    });
+
     es.addEventListener('synthesis_start', () => {
       setStatus('synthesizing');
     });
@@ -94,6 +102,11 @@ export default function useDebateStream(debateId) {
         bottom_line: data.bottom_line,
         confidence_level: data.confidence_level || 'uncertain',
       });
+      disconnect();
+    });
+
+    es.addEventListener('debate_stopped', (e) => {
+      setStatus('stopped');
       disconnect();
     });
 

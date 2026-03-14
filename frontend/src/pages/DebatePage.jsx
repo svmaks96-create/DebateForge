@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FileText, ArrowLeft, ArrowDown, Loader } from 'lucide-react';
+import { FileText, ArrowLeft, ArrowDown, Loader, StopCircle } from 'lucide-react';
 import api from '../api';
 import useDebateStream from '../hooks/useDebateStream';
 import LiveViewer from '../components/LiveViewer';
@@ -134,6 +134,12 @@ function StatusBar({ status, currentRound, totalRounds, formatName }) {
           Final Positions
         </span>
       )}
+      {status === 'verifying' && (
+        <span className="flex items-center gap-1.5 text-amber-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          Verifying…
+        </span>
+      )}
       {status === 'synthesizing' && (
         <span className="flex items-center gap-1.5 text-violet-400">
           <FileText size={12} />
@@ -142,6 +148,9 @@ function StatusBar({ status, currentRound, totalRounds, formatName }) {
       )}
       {status === 'completed' && (
         <span className="text-green-400">Completed</span>
+      )}
+      {status === 'stopped' && (
+        <span className="text-orange-400">Stopped</span>
       )}
       {status === 'error' && (
         <span className="text-red-400">Error</span>
@@ -156,10 +165,11 @@ export default function DebatePage() {
   const [debate, setDebate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
+  const [stopping, setStopping] = useState(false);
   const analysisRef = useRef(null);
 
   // Determine if we should stream (only for running/configuring debates)
-  const shouldStream = debate && ['running', 'configuring'].includes(debate.status);
+  const shouldStream = debate && ['running', 'configuring', 'reflecting', 'verifying', 'synthesizing'].includes(debate.status);
 
   const stream = useDebateStream(shouldStream ? id : null);
 
@@ -175,6 +185,17 @@ export default function DebatePage() {
         setLoading(false);
       });
   }, [id]);
+
+  const handleStop = async () => {
+    if (stopping) return;
+    setStopping(true);
+    try {
+      await api.post(`/debates/${id}/stop`);
+    } catch (err) {
+      console.error('Failed to stop deliberation:', err);
+      setStopping(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -203,6 +224,8 @@ export default function DebatePage() {
   const effectiveStatus = isLive
     ? (stream.status === 'connecting' ? (debate.status === 'configuring' ? 'configuring' : debate.status) : stream.status)
     : debate.status;
+
+  const canStop = !stopping && ['running', 'reflecting', 'verifying', 'synthesizing'].includes(effectiveStatus);
 
   // Build arguments from the right source
   let displayArgs = [];
@@ -252,6 +275,7 @@ export default function DebatePage() {
     : debate.format_config?.rounds?.length || 0;
   const formatName = debate.format_config?.format_name || '';
   const councilMembers = debate.council_members || [];
+  const verificationReport = debate.verification_report || null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
@@ -266,13 +290,30 @@ export default function DebatePage() {
       {/* Topic */}
       <h1 className="text-xl font-semibold text-gray-100 leading-snug">{debate.topic}</h1>
 
-      {/* Status bar */}
-      <StatusBar
-        status={effectiveStatus}
-        currentRound={currentRound}
-        totalRounds={totalRounds}
-        formatName={formatName}
-      />
+      {/* Status bar + stop button */}
+      <div className="flex items-center justify-between">
+        <StatusBar
+          status={effectiveStatus}
+          currentRound={currentRound}
+          totalRounds={totalRounds}
+          formatName={formatName}
+        />
+        {canStop && (
+          <button
+            onClick={handleStop}
+            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg border border-red-500/20"
+          >
+            <StopCircle size={14} />
+            Stop
+          </button>
+        )}
+        {stopping && effectiveStatus !== 'stopped' && (
+          <span className="flex items-center gap-1.5 text-xs text-orange-400">
+            <Loader size={12} className="animate-spin" />
+            Stopping…
+          </span>
+        )}
+      </div>
 
       {/* Council member badges */}
       {councilMembers.length > 0 && (
@@ -314,11 +355,12 @@ export default function DebatePage() {
           animate={isLive}
           status={effectiveStatus}
           rounds={displayRounds}
+          verificationReport={verificationReport}
         />
       )}
 
       {/* Position cards during reflecting phase */}
-      {(effectiveStatus === 'reflecting' || effectiveStatus === 'synthesizing' || effectiveStatus === 'completed') && displayPositions.length > 0 && (
+      {(effectiveStatus === 'reflecting' || effectiveStatus === 'verifying' || effectiveStatus === 'synthesizing' || effectiveStatus === 'completed') && displayPositions.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
             Final Positions
@@ -336,6 +378,7 @@ export default function DebatePage() {
             debateId={id}
             synthesis={displaySynthesis}
             councilMembers={councilMembers}
+            verificationReport={verificationReport}
           />
         </div>
       )}
