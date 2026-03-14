@@ -171,6 +171,10 @@ RULES:
 5. Vary your arguments across rounds — do not repeat the same points.
 6. Stay in character: argue from your expertise and priorities.
 
+"""
+
+        if self.enable_search:
+            prompt += """
 == EVIDENCE ==
 You have access to a web_search tool. Use it to find real evidence when making
 factual claims about data, statistics, studies, or current events. You should:
@@ -179,7 +183,18 @@ factual claims about data, statistics, studies, or current events. You should:
 - Be honest if search results contradict your position
 - Max 3 searches per round — choose queries wisely
 - Not every argument needs citations — logical reasoning is also valuable
+"""
 
+        citations_field = ""
+        citations_note = ""
+        if self.enable_search:
+            citations_field = f""",
+      "citations": [
+        {{"url": "...", "title": "...", "snippet": "...", "date": "...", "source_type": "news|academic|government|web"}}
+      ]"""
+            citations_note = '\nThe "citations" field: list of sources from your web searches (empty list [] if none).'
+
+        prompt += f"""
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
 Format:
 {{
@@ -194,18 +209,14 @@ Format:
       "warrant": "Reasoning connecting grounds to claim",
       "backing": "Additional support for the warrant",
       "qualifier": "Conditions or limitations on the claim",
-      "confidence": 7,
-      "citations": [
-        {{"url": "...", "title": "...", "snippet": "...", "date": "...", "source_type": "news|academic|government|web"}}
-      ]
+      "confidence": 7{citations_field}
     }}
   ],
   "summary": "Brief summary of your perspective this round"
 }}
 
 The "confidence" field is required: an integer 0-10 reflecting how genuinely confident you are.
-The "stance" field is required: how you feel about this particular point.
-The "citations" field: list of sources from your web searches (empty list [] if none).
+The "stance" field is required: how you feel about this particular point.{citations_note}
 The "type" field options:
 - "claim": a new point or assertion
 - "rebuttal": directly countering another member's argument

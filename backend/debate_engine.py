@@ -270,6 +270,7 @@ async def _run_deliberation_inner(debate_id: uuid.UUID, db: AsyncSession) -> Non
             argument_prefix=agent_row.argument_prefix,
             seat_number=agent_row.seat_number,
             council_members=council_members,
+            enable_search=debate.enable_search,
         )
 
         position_data = await agent.generate_final_position(full_history)

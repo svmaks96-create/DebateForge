@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger("uvicorn.error")
 
 MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 4096
+MAX_TOKENS = 16000
 
 FALLBACK_SYNTHESIS = {
     "synthesis": {
@@ -39,6 +39,9 @@ def _build_synthesizer_system_prompt(
     topic: str,
     context: str | None,
     agents: list[DebateAgent],
+    *,
+    enable_search: bool = True,
+    enable_verification: bool = True,
 ) -> str:
     agent_list = "\n".join(
         f"  - Seat {a.seat_number + 1} ({a.argument_prefix}): {a.title}\n"
@@ -66,8 +69,13 @@ SYNTHESIS PRINCIPLES:
 5. Be honest about what is genuinely uncertain or unresolvable.
 6. Extract non-obvious insights from cross-pollination of different expertise areas.
 7. Do NOT pick a winner or declare one position superior.
-8. Produce actionable insight, not just academic analysis.
-9. If an independent verification report is provided, integrate its findings: highlight verified claims, flag disputed ones, and surface blind spots in your conclusion.
+8. Produce actionable insight, not just academic analysis."""
+
+    if enable_verification:
+        prompt += "\n9. If an independent verification report is provided, integrate its findings: highlight verified claims, flag disputed ones, and surface blind spots in your conclusion."
+
+    if enable_search:
+        prompt += """
 
 EVIDENCE ASSESSMENT:
 In addition to theme analysis, evaluate the evidence quality:
@@ -76,7 +84,31 @@ In addition to theme analysis, evaluate the evidence quality:
 - Do the citations actually support the claims being made?
 - Are there important claims made without any evidence?
 - Note any evidence gaps — questions that could be answered with data but weren't
-Include an "evidence_assessment" field in your output.
+Include an "evidence_assessment" field in your output."""
+
+    # Build optional JSON fields
+    evidence_field = ""
+    if enable_search:
+        evidence_field = """,
+    "evidence_assessment": {{
+      "total_citations": 12,
+      "agents_citing": ["A", "B", "C"],
+      "strongest_citation": {{"argument_id": "A2", "why": "Authoritative source directly supporting the claim"}},
+      "unsupported_claims": ["C3 claimed X without evidence"],
+      "evidence_gaps": ["No data cited on actual enterprise AI ROI"]
+    }}"""
+
+    verification_field = ""
+    if enable_verification:
+        verification_field = """,
+    "verification_summary": {{
+      "overall_reliability": "high|moderate|low",
+      "verified_insights": ["Claims independently confirmed by fact-checker"],
+      "disputed_claims": ["Claims the fact-checker found problematic"],
+      "blind_spots_discovered": ["Important factors nobody considered"]
+    }}"""
+
+    prompt += f"""
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.
 Output format:
@@ -122,21 +154,8 @@ Output format:
     ],
     "blind_spots": ["Important dimensions not adequately addressed by the council"],
     "key_insights": ["Non-obvious insights that emerged from cross-pollination of perspectives"],
-    "open_questions": ["Unanswered questions from the deliberation"],
-    "evidence_assessment": {{
-      "total_citations": 12,
-      "agents_citing": ["A", "B", "C"],
-      "strongest_citation": {{"argument_id": "A2", "why": "Authoritative source directly supporting the claim"}},
-      "unsupported_claims": ["C3 claimed X without evidence"],
-      "evidence_gaps": ["No data cited on actual enterprise AI ROI"]
-    }},
-    "verification_summary": {{
-      "overall_reliability": "high|moderate|low",
-      "verified_insights": ["Claims independently confirmed by fact-checker"],
-      "disputed_claims": ["Claims the fact-checker found problematic"],
-      "blind_spots_discovered": ["Important factors nobody considered"]
-    }},
-    "nuanced_conclusion": "3-4 paragraph balanced conclusion organized by themes. What the evidence suggests, where it is uncertain, and what a decision-maker should consider. Reference verification findings where relevant."
+    "open_questions": ["Unanswered questions from the deliberation"]{evidence_field}{verification_field},
+    "nuanced_conclusion": "3-4 paragraph balanced conclusion organized by themes. What the analysis suggests, where it is uncertain, and what a decision-maker should consider."
   }}
 }}"""
 
@@ -264,6 +283,126 @@ def _build_synthesizer_user_message(
     return msg
 
 
+def _extract_json_object(text: str) -> str | None:
+    """Find the outermost JSON object in text by matching braces."""
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if escape:
+            escape = False
+            continue
+        if c == "\\":
+            escape = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def _repair_truncated_json(raw_text: str) -> dict | None:
+    """Attempt to recover synthesis from truncated JSON output.
+
+    When MAX_TOKENS cuts off the response mid-JSON, we try to close
+    open brackets/braces to salvage whatever was produced.
+    """
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```\s*$", "", text)
+
+    brace_start = text.find("{")
+    if brace_start < 0:
+        return None
+
+    text = text[brace_start:]
+
+    # Strip any trailing incomplete string value (cut mid-string)
+    # Remove trailing partial string: last unmatched quote to end
+    depth = 0
+    in_string = False
+    escape = False
+    last_good = 0
+    for i, c in enumerate(text):
+        if escape:
+            escape = False
+            continue
+        if c == "\\":
+            escape = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            if not in_string:
+                last_good = i
+            continue
+        if in_string:
+            continue
+        if c in "{}[],:" or c.strip() == "" or c.isalnum() or c in ".-_":
+            last_good = i
+
+    # If we ended inside a string, truncate to last good position
+    if in_string:
+        text = text[: last_good + 1] + '"'
+
+    # Count open braces/brackets and close them
+    depth_brace = 0
+    depth_bracket = 0
+    in_str = False
+    esc = False
+    for c in text:
+        if esc:
+            esc = False
+            continue
+        if c == "\\":
+            esc = True
+            continue
+        if c == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if c == "{":
+            depth_brace += 1
+        elif c == "}":
+            depth_brace -= 1
+        elif c == "[":
+            depth_bracket += 1
+        elif c == "]":
+            depth_bracket -= 1
+
+    # Remove any trailing comma before we close
+    text = text.rstrip()
+    if text.endswith(","):
+        text = text[:-1]
+
+    # Close open brackets then braces
+    text += "]" * max(depth_bracket, 0)
+    text += "}" * max(depth_brace, 0)
+
+    try:
+        data = json.loads(text)
+        if "synthesis" in data:
+            logger.info("Repaired truncated synthesis JSON successfully")
+            return data
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
+
 def _parse_synthesis_response(raw_text: str) -> dict | None:
     """Three-tier parse: direct JSON -> code block -> brace search."""
     # Try 1: direct parse
@@ -285,14 +424,19 @@ def _parse_synthesis_response(raw_text: str) -> dict | None:
             pass
 
     # Try 3: find any JSON object in the text
-    brace_start = raw_text.find("{")
-    if brace_start >= 0:
+    json_str = _extract_json_object(raw_text)
+    if json_str:
         try:
-            data = json.loads(raw_text[brace_start:])
+            data = json.loads(json_str)
             if "synthesis" in data:
                 return data
         except json.JSONDecodeError:
             pass
+
+    # Try 4: repair truncated JSON (MAX_TOKENS cutoff)
+    repaired = _repair_truncated_json(raw_text)
+    if repaired:
+        return repaired
 
     return None
 
@@ -358,7 +502,11 @@ async def synthesize_deliberation(
         return
 
     # Build prompts
-    system_prompt = _build_synthesizer_system_prompt(debate.topic, debate.context, agents)
+    system_prompt = _build_synthesizer_system_prompt(
+        debate.topic, debate.context, agents,
+        enable_search=debate.enable_search,
+        enable_verification=debate.enable_verification,
+    )
     user_message = _build_synthesizer_user_message(arguments, agents, rounds_info, positions, verification_report)
 
     # Call Claude with retry
