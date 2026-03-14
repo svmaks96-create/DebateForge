@@ -4,6 +4,7 @@ import { Sparkles, Play, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../api';
 import FormatSelector from '../components/FormatSelector';
 import CouncilSetup from '../components/CouncilSetup';
+import HowItWorks from '../components/HowItWorks';
 
 const emptyAgent = () => ({ mode: 'auto', identity: null, personaId: null });
 
@@ -114,6 +115,8 @@ export default function HomePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+      <HowItWorks />
+
       {/* Section 1: Topic */}
       <section>
         <input
