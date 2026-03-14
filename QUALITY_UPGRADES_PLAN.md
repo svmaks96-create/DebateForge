@@ -220,38 +220,42 @@ frontend/src/components/
 ### Modified Files (All Features Combined)
 ```
 backend/
-├── config.py              # +TAVILY_API_KEY, +ENABLE_VERIFICATION
-├── models.py              # +evidence_mode, +evidence_sources, +verification_report,
-│                          #  +confidence_history, +reflections, +framework
-├── schemas.py             # +EvidenceSource, +VerificationReport, +ConfidencePoint,
-│                          #  +AgentReflection, +FrameworkConfig
-├── agent.py               # +tool_use for search, +confidence tracking,
-│                          #  +reflection generation, +framework focus injection
-├── judge.py               # +citation eval, +verification integration,
-│                          #  +evolution analysis, +framework sections
-├── debate_engine.py       # +evidence passing, +reflection phase,
-│                          #  +verification phase, +framework loading
-├── events.py              # +evidence_found, +verification_*, +confidence_update,
-│                          #  +reflection_* SSE events
+├── config.py              # +TAVILY_API_KEY (Features 1,2 ✅)
+├── models.py              # +enable_search, +citations, +verification_report,
+│                          #  +enable_verification (✅), +confidence_history,
+│                          #  +reflections, +framework (planned)
+├── schemas.py             # +CitationData, +enable_search/enable_verification (✅),
+│                          #  +ConfidencePoint, +AgentReflection, +FrameworkConfig (planned)
+├── agent.py               # +tool_use for search, +conditional EVIDENCE prompt (✅),
+│                          #  +confidence tracking, +reflection generation,
+│                          #  +framework focus injection (planned)
+├── judge.py               # +conditional evidence_assessment/verification_summary (✅),
+│                          #  +truncated JSON repair, +16000 max_tokens (✅),
+│                          #  +evolution analysis, +framework sections (planned)
+├── debate_engine.py       # +enable_search passing, +verification phase (✅),
+│                          #  +reflection phase, +framework loading (planned)
+├── events.py              # +verification_start, +verification_complete (✅),
+│                          #  +confidence_update, +reflection_* (planned)
 └── routes/
-    ├── debates.py         # Updated schemas for new fields
-    └── formats.py         # +GET /api/frameworks endpoint
+    ├── debates.py         # Updated schemas for new fields (✅)
+    └── formats.py         # +GET /api/frameworks endpoint (planned)
 
 frontend/src/
 ├── pages/
-│   ├── HomePage.jsx       # +Evidence toggle, +Verification toggle,
-│   │                      #  +FrameworkSelector, +persona auto-fill
-│   └── DebatePage.jsx     # Handles new phases in live view
+│   ├── HomePage.jsx       # +Evidence toggle, +Verification toggle (✅),
+│   │                      #  +FrameworkSelector, +persona auto-fill (planned)
+│   └── DebatePage.jsx     # Handles verification phase in live view (✅)
 ├── components/
-│   ├── ArgumentCard.jsx   # +sources section, +verification badge,
-│   │                      #  +confidence badge with delta
-│   ├── AnalysisDashboard.jsx  # +Evidence Quality, +VerificationReport,
+│   ├── ArgumentCard.jsx   # +citations section, +verification badge (✅),
+│   │                      #  +confidence badge with delta (planned)
+│   ├── AnalysisDashboard.jsx  # +Evidence Quality, +Verification section (✅),
 │   │                          #  +ConfidenceTimeline, +ReflectionPanel,
-│   │                          #  +framework-specific sections
-│   ├── AgentSetup.jsx     # +framework persona suggestions
-│   └── LiveViewer.jsx     # +verification phase display
+│   │                          #  +framework-specific sections (planned)
+│   ├── AgentSetup.jsx     # +framework persona suggestions (planned)
+│   └── LiveViewer.jsx     # +verification phase display (✅)
 └── hooks/
-    └── useDebateStream.js # +evidence, +verification, +confidence SSE handlers
+    └── useDebateStream.js # +verification SSE handlers (✅),
+                           #  +confidence SSE handlers (planned)
 ```
 
 ### New Database Columns
@@ -271,15 +275,13 @@ frontend/src/
 | GET | /api/frameworks | 4 |
 
 ### New SSE Event Types
-| Event | Payload | Feature |
-|-------|---------|---------|
-| evidence_found | {argument_index, source} | 1 |
-| verification_started | {} | 2 |
-| claim_checked | {claim, verdict} | 2 |
-| verification_complete | {report} | 2 |
-| confidence_update | {agent_id, round, confidence} | 3 |
-| reflection_started | {agent_id} | 3 |
-| reflection_complete | {agent_id, reflection} | 3 |
+| Event | Payload | Feature | Status |
+|-------|---------|---------|--------|
+| verification_start | {} | 2 | ✅ Done |
+| verification_complete | {overall_reliability, verified_count, blind_spots_count} | 2 | ✅ Done |
+| confidence_update | {agent_id, round, confidence} | 3 | Planned |
+| reflection_started | {agent_id} | 3 | Planned |
+| reflection_complete | {agent_id, reflection} | 3 | Planned |
 
 ## Total Cost Estimates
 
@@ -288,10 +290,10 @@ frontend/src/
 |-----------|-----|-----|
 | Base Claude (agents + synthesizer) | $0.15 | $0.30 |
 | Evidence Mode (Tavily + extra tokens) | $0.20 | $0.25 |
-| Adversarial Verification (Claude + Tavily) | $0.10 | $0.20 |
+| Adversarial Verification (Haiku + Tavily) | $0.03 | $0.10 |
 | Position Evolution (reflections) | $0.04 | $0.16 |
 | Decision Frameworks | $0.00 | $0.00 |
-| **Total** | **$0.49** | **$0.91** |
+| **Total** | **$0.42** | **$0.81** |
 
 ### Per-Debate Cost (Base Only, All Features Off)
 | Component | Min | Max |
@@ -302,7 +304,7 @@ frontend/src/
 ### Monthly Estimates (50 debates/month)
 | Configuration | Min | Max |
 |---------------|-----|-----|
-| All features on | $24.50 | $45.50 |
+| All features on | $21.00 | $40.50 |
 | Base only | $7.50 | $15.00 |
 
 ### External API Keys Required
